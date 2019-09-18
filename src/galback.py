@@ -7,7 +7,6 @@
 # All other initial parameters are 'hardcoded' below. Change them as
 # needed
 
-from __future__ import print_function,division
 import sys
 import os
 #import datetime
@@ -15,18 +14,10 @@ from crpropa import *
 import numpy as np
 
 # _____________________________________________________________________
-if len(sys.argv)<3:
-    print("usage: python", sys.argv[0], "Z   E/EeV")
-    sys.exit(1)
-
-Z = int(sys.argv[1])
-E = int(sys.argv[2])
-
-# _____________________________________________________________________
 # All other parameters are set below. Fix them as needed.
 # The main parameter in healpy_points.py that defines how "precise" is
 # the grid.
-Nside = 512
+Nside = 256
 
 # Maximum step in tracking a nucleus, parsec
 max_step = 25
@@ -35,16 +26,24 @@ tolerance = 1e-4
 # Model of the Galactic Magnetic Field
 # Pshirkov, Tinyakov, Kronberg, Newton-McGee, ApJ 2011:
 # NB: check ASS, BSS, Halo below in the code!
-#GMF = "PTKN11"
+GMF = "PTKN11"
 # Jasson, Farrar, 2012:
-GMF = "JF12"
+#GMF = "JF12"
 # In case of striated and/or turbulent components:
-striated = 1
-turbulent = 1
-random_seed = 2**27
+#striated = 1
+#turbulent = 1
+random_seed = 2**27     # only relevant for the JF model
 
 # Radius of the Milky Way, kpc
 Galaxy_radius = 20
+
+# _____________________________________________________________________
+if len(sys.argv)<3:
+    print("usage: python", sys.argv[0], "Z   E/EeV")
+    sys.exit(1)
+
+Z = int(sys.argv[1])
+E = int(sys.argv[2])
 
 # _____________________________________________________________________
 # Energy and type of a nucleus to propagate: PID = -nucleusId(A,Z)
@@ -118,12 +117,23 @@ if GMF == "JF12":
         seed_text = ', random seed=' + str(random_seed)
         B.randomTurbulent(random_seed)
         GMF = GMF + 'T'
+
+    # Basename of an output file
+    output_file = ('data/jf/' + str(Nside) + '/' +nucleus
+            + '_{:03d}'.format(E)
+            + 'EeV.txt')
+
 elif GMF=='PTKN11':
     B = PT11Field()
     #B.setUseASS(True)
     B.setUseBSS(True)
     B.setUseHalo(True)
     seed_text = ''
+
+    # Basename of an output file
+    output_file = ('data/pt/' + str(Nside) + '/' +nucleus
+            + '_{:03d}'.format(E)
+            + 'EeV.txt')
 else:
     print('Wrong GMF!')
     sys.exit()
@@ -131,9 +141,6 @@ else:
 # Name of a 2-column ASCII file with colatitude and longitude
 # of the observed particle
 input_file  = 'healpy_coordinates_nside' + str(Nside) + '_rad.txt.gz'
-
-# Basename of an output file
-output_file = (nucleus + '_{:03d}'.format(E) + 'EeV.txt')
 
 # Header for output_file
 output_header = (' PID = ' + str(PID) + ' (' + nucleus
@@ -216,8 +223,6 @@ for i in np.arange(initial_points_number):
     # NB: Size of the Milky Way
     # https://www.space.com/29270-milky-way-size-larger-than-thought.html
     # https://arxiv.org/abs/1503.00257
-    # Deprecated:
-    #obs.add(ObserverLargeSphere(Vector3d(0.), Galaxy_radius * kpc))
     obs.add(ObserverSurface(Sphere(Vector3d(0.), Galaxy_radius * kpc)))
     #obs.onDetection(TextOutput(output_file + '.txt', Output.Event3D))
     sim.add(obs)
@@ -241,6 +246,7 @@ for i in np.arange(initial_points_number):
     lat_ini_deg,lon_ini_deg,lat_res_deg,lon_res_deg,deflection_deg \
     = np.rad2deg([lat_ini,lon_ini,lat_res,lon_res,deflection])
 
+    # Here we convert colatitudes to latitudes: 90-lat_ini
     print('{:9.3f}{:10.3f}{:9.3f}{:10.3f}{:10.4f}'.
             format(90-lat_ini_deg,lon_ini_deg,90-lat_res_deg,
                 lon_res_deg,deflection_deg))
@@ -255,5 +261,5 @@ for i in np.arange(initial_points_number):
 np.savetxt(output_file,backtracking_results,fmt='%11.5f',
         header=output_header,comments='#')
 os.system('xz '+output_file)
-# _____________________________________________________________________
 
+# EOF
