@@ -2,7 +2,8 @@
 `data/sample_D3.5Mpc_Emin56EeV_1000nuclei.txt` obtained with
 `psample.py` and then creates a sample of "UHECRs" coming from a
 particular source, using "nucleus_NNNEeV.txt.xz" obtained with
-galback.py.
+galback.py and located in a directory that corresponds to the
+selected Nside and the GMF model (e.g., in data/jf/512/).
 
 Input:
     * source_id='CenA' -- the "name" of an UHECR source
@@ -12,11 +13,13 @@ Input:
     * Nside=512 -- the HEALPix parameter
     * source_vicinity_radius = 1 [deg]
     * a file `data/sample_D..._sorted.txt` prepared with `psample.py`
+    * GMF = 'PTKN11'|'JF12ST' -- the GMF model
 
 Output:
     * a file like
       `src_sample_CenA_D3.5_Emin56_N1000_R1_Nside512.txt.xz`
-      to be placed in `data/sources/`.
+      to be placed in `data/GMF/sources/` where GMF=[jf|pt]
+      depending on the chosen GMF model.
 
 An output file contains 8 columns:
     * arrival direction at Earth (lat_ini, lon_ini), degrees;
@@ -51,20 +54,19 @@ there may be less "suitable" (Z,E) pairs coming form the vicinity of the
 source on a given healpix' grid! Use greater Nside if necessary or
 increase the radius of the vicinity*
 
-`convert_src_sample.py` can be used to convert data from 
-`data/sources/src_sample_...NsideXXX.txt.xz` file to data (and file)
+`convert_src_sample.py` can be used to convert data from
+`data/GMF/sources/src_sample_...NsideXXX.txt.xz` file to data (and file)
 calculated for another Nside.
 
 An output file is called src_sample_ID....txt.xz and is placed
-in data/sources/
+in data/GMF/sources/
 """
 
-from __future__ import print_function, division
 
 import sys
 import numpy as np
 from PyAstronomy.pyasl import getAngDist
-#import matplotlib.pyplot as plt
+
 import lzma
 import healpy as hp
 import os
@@ -79,20 +81,22 @@ source_id = 'CenA'
 
 # Total number of EECRs to be found in the given vicinity of the source.
 # This is the same number as used in psample.py
-Nini = 100000
+Nini = 10000
 
 # Minimum energy used to create a sample, EeV:
 Emin = 56
 
 # Healpix grid used in simulations:
-Nside = 512
-#Nside = 256
-#Nside = 64
+#Nside = 512
+Nside = 256
 
 # Radius of the source neighborhood, deg
 source_vicinity_radius = 1
 
+# Model of the Galactic Magnetic Field
 #GMF = 'JF12ST'
+GMF = 'PTKN11'
+
 #______________________________________________________________________
 # No settings below
 
@@ -126,6 +130,12 @@ else:
 
 #______________________________________________________________________
 # A file in spectra_1s/
+
+if GMF=='PTKN11':
+    gmf_dir = 'pt/'
+else:
+    gmf_dir = 'jf/'
+
 # File with the spectrum that was "propagated" with CRPropa
 infile = ('data/sample_D'+D_src+'_Emin'+str(Emin)+'_'
         + str(Nini) + 'nuclei_sorted.txt')
@@ -161,13 +171,14 @@ nuclei = ['proton','helium','lithium','beryllium','boron','carbon',
 # A counter of EECRs added to the output file (result)
 k = 0
 
+# A counter for missing (Z,E) pairs
 err_no = 0
 
 # Let us check first that all necessary files exist
 for i in np.arange(N_files):
     nucleus = nuclei[Z[i]-1]
     filename = nucleus + '_{:03d}EeV.txt.xz'.format(E[i])
-    file2load = ('data/jf/'+str(Nside)+'/'+filename)
+    file2load = ('data/'+gmf_dir+str(Nside)+'/'+filename)
 
     print(nucleus + ' (Z = ' +str(Z[i])+ ') ' + str(E[i]) + ' EeV')
 
@@ -175,13 +186,18 @@ for i in np.arange(N_files):
     if os.path.isfile(file2load):
         print('OK')
     else:
-        print('-------> ' + filename + ' file not found!')
-        print('{:} nuclei are needed'.format(M[i]))
+        # This is to be copy-pasted in run_galback.py or
+        # a similar script
+        print(('-----> MISSING: '+ nucleus
+                + '\t(Z,E) = {:2d}\t{:3d}\t{:3d} '
+                + 'nuclei needed')
+                .format(Z[i],E[i],M[i]))
         err_no += M[i]
 
 if err_no>0:
-    print('{:} file(s) are missing'.format(err_no))
-    print('{:} nuclei will not be included'.format(err_no))
+    print('Files for some (Z,E) are missing.')
+    print('{:} nuclei will not be included in the output'
+            .format(err_no))
     # Normally, we should exit at this point but let us allow
     # going forward in case the number of missing nuclei is much
     # less than the size of the sample.
@@ -198,7 +214,7 @@ for i in np.arange(N_files):
     print(nucleus + ' (Z = ' +str(Z[i])+ ') ' + str(E[i]) + ' EeV')
 
     try:
-        file2load = ('data/jf/'+str(Nside)+'/'+filename)
+        file2load = ('data/'+gmf_dir+str(Nside)+'/'+filename)
         with lzma.open(file2load,'rt') as f:
             summary = np.genfromtxt(f,dtype=float)
 
@@ -269,7 +285,7 @@ for i in np.arange(N_files):
 header = ('#   lat_ini    lon_ini    lat_res    lon_res     angsep   '
           'Z   E   cell_no\n')
 
-with open('data/sources/'+outfile+'.txt','w') as d:
+with open('data/' + gmf_dir + 'sources/' + outfile + '.txt','w') as d:
     d.write(header)
     for i in np.arange(Nini):
         d.write('{:11.5f}{:11.5f}{:11.5f}{:11.5f}{:11.5f}{:4d}{:5d}{:9d}\n'.
@@ -278,7 +294,6 @@ with open('data/sources/'+outfile+'.txt','w') as d:
                    outdata[i,4],int(outdata[i,5]),
                    int(outdata[i,6]),int(outdata[i,7])))
 
-os.system('xz data/sources/'+outfile+'.txt')
+os.system('xz data/' + gmf_dir + 'sources/' + outfile + '.txt')
 
 #______________________________________________________________________
-
