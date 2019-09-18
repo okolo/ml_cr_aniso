@@ -4,13 +4,13 @@ from data/sources/ and converts it to a similar file for another Nside.
 
 """
 
-from __future__ import print_function, division
+#from __future__ import print_function, division
 
 import sys
 import os
 import numpy as np
 import healpy as hp
-from backports import lzma
+import lzma
 
 #______________________________________________________________________
 
@@ -25,19 +25,23 @@ source_id = 'CenA'
 #______________________________________________________________________
 
 # Emin for which the input sample was generated
-Emin = 8   # EeV
+Emin = 56   # EeV
 
 # Less used initial parameters
 # healpix grid parameter
-Nside = 512
+Nside = 128
 
 # Radius of the vicinity of a source used when making a sample
 source_vicinity_radius = 1
 
+# Model of the Galactic Magnetic Field
+#GMF = 'JF12ST'
+GMF = 'PTKN11'
+
 # Size of the initial sample of from-source events. It is used
 # in the initial file name and when making a sample of src_frac*N_EECR
 # IT SHOULD NOT BE MODIFIED UNLESS A NEW INPUT FILE IS CREATED
-Nini = 100000
+Nini = 10000
 
 #______________________________________________________________________
 
@@ -76,6 +80,13 @@ else:
 
 #______________________________________________________________________
 
+if GMF=='PTKN11':
+    gmf_dir = 'pt/'
+else:
+    gmf_dir = 'jf/'
+
+dir_prefix = 'data/'+gmf_dir+'sources/'
+
 # Input file name; the file must be prepared with src_sample.py
 # It provides data for making a sample of from-source events
 infile = ('src_sample_' + source_id + '_D' + D_src
@@ -99,10 +110,10 @@ outfile = ('src_sample_' + source_id + '_D' + D_src
 # lat_ini, lon_ini, lat_res, lon_res, angsep, Z, E, cell_no
 #data = np.loadtxt('data/sources/'+infile)
 try:
-    with lzma.open('data/sources/'+infile,'rt') as f:
+    with lzma.open(dir_prefix+infile,'rt') as f:
         data = np.genfromtxt(f,dtype=float)
 except IOError:
-    print('\n-------> data/sources/' + infile + ' file not found!\n')
+    print('\n-------> ' +dir_prefix+infile+' file not found!\n')
     sys.exit()
 
 # 2. Find non-zero lines, i.e., those with Z>0:
@@ -125,7 +136,7 @@ healpix_cells  = hp.ang2pix(Nside,np.rad2deg(lon_arr),
 header = ('#   lat_ini    lon_ini    lat_res    lon_res     angsep   '
           'Z   E   cell_no\n')
 
-with open('data/sources/'+outfile,'w') as d:
+with open(dir_prefix+outfile,'w') as d:
     d.write(header)
     for i in np.arange(len(nonz)):
         d.write('{:11.5f}{:11.5f}{:11.5f}{:11.5f}{:11.5f}{:4d}{:5d}{:9d}\n'.
@@ -134,5 +145,5 @@ with open('data/sources/'+outfile,'w') as d:
                    data[i,4],int(data[i,5]),
                    int(data[i,6]),int(healpix_cells[i])))
 
-os.system('xz data/sources/'+outfile)
-
+os.system('xz '+dir_prefix+outfile)
+# EOF
