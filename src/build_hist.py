@@ -7,7 +7,7 @@ beta=0.05
 
 out_file = 'hist.pdf'
 
-cline_parser = argparse.ArgumentParser(description='Spectrum generator')
+cline_parser = argparse.ArgumentParser(description='Histogram builder')
 
 
 def add_arg(*pargs, **kwargs):
