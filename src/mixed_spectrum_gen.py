@@ -35,10 +35,12 @@ add_arg('--Neecr', type=int, help='Total number of EECRs in each sample', defaul
 add_arg('--Emin', type=int, help='Emin in EeV for which the input sample was generated', default=56)
 add_arg('--Nmixed_samples', type=int, help='Number of mixed samples (i.e., the sample size)', default=1000)
 add_arg('--source_id', type=str, help='source (CenA, NGC253, M82, M87 or FornaxA)', default='CenA')
-add_arg('--data_dir', type=str, help='directory containig  files prepared with src_sample.py', default='data/sources')
+add_arg('--data_dir', type=str, help='data root directory (should contain jf/sources/ or pt/sources/)', default='data')
+add_arg('--mf', type=str, help='Magnetic field model (jf or pt)', default='jf')
 add_arg('--start_idx', type=int, help='file idx to start from', default=0)
 add_arg('--alm', action='store_true', help="generate a_lm")
 add_arg('--l_max', type=int, help='file idx to start from', default=32)
+add_arg('--Nside', type=int, help='healpix grid Nside parameter', default=512)
 
 args = cline_parser.parse_args()
 
@@ -71,7 +73,7 @@ normalize_aps = 0
 
 # Less used initial parameters
 # healpix grid parameter
-Nside = 512
+Nside = args.Nside
 
 # l_max for the angular power spectrum plot
 lmax = args.l_max
@@ -154,6 +156,7 @@ if Fsrc is not None:
     else:
         outfile1 = ('aps_'
                     + source_id + '_D' + D_src
+                    + '_B' + args.mf
                     + '_Emin' + str(Emin)
                     + '_Neecr' + str(Neecr)
                     + '_Nsample' + str(Nmixed_samples)
@@ -164,6 +167,7 @@ if Fsrc is not None:
 else:
     outfile1 = ('aps_'
             + source_id + '_D' + D_src
+            + '_B' + args.mf
             + '_Emin' + str(Emin)
             + '_Neecr' + str(Neecr)
             + '_Nsample' + str(Nmixed_samples)
@@ -196,7 +200,7 @@ for i in range(args.start_idx, args.start_idx + 100000):
 data = []
 if Fsrc != 0.:
     try:
-        infile = args.data_dir + '/'+ infile
+        infile = args.data_dir + '/' + args.mf + '/sources/' + infile
         with lzma.open(infile, 'rt') as f:
             data = np.genfromtxt(f,dtype=float)
             # data = np.loadtxt('data/sources/'+infile)
