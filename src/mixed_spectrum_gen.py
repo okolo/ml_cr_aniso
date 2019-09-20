@@ -41,6 +41,7 @@ add_arg('--start_idx', type=int, help='file idx to start from', default=0)
 add_arg('--alm', action='store_true', help="generate a_lm")
 add_arg('--l_max', type=int, help='file idx to start from', default=32)
 add_arg('--Nside', type=int, help='healpix grid Nside parameter', default=512)
+add_arg('--Nini', type=int, help='Size of the initial sample of from-source events', default=10000)
 
 args = cline_parser.parse_args()
 
@@ -86,7 +87,7 @@ random_seed = 2**27-10000
 # Size of the initial sample of from-source events. It is used
 # in the initial file name and when making a sample of Fsrc*N_EECR
 # IT SHOULD NOT BE MODIFIED UNLESS A NEW INPUT FILE IS CREATED
-Nini = 10000
+Nini = args.Nini
 
 
 if source_id=='M82':
