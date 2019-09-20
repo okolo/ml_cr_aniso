@@ -324,13 +324,17 @@ for i in np.arange(0,Nmixed_samples):
         if args.alm:
             spectrum[i, :] = ang_data[0]
             if alm is None:
-                alm = np.zeros((Nmixed_samples,len(ang_data[1])))
+                alm = np.zeros((Nmixed_samples, len(ang_data[1])), dtype=np.complex)
             alm[i,:] = ang_data[1]
         else:
             spectrum[i,:] = ang_data
 
     fractions[i] = Nsrc/Neecr
 
-np.savez(outfile1, spectrum=spectrum, fractions=fractions, alm=alm)
+if alm is None:
+    np.savez(outfile1, spectrum=spectrum, fractions=fractions)
+else:
+    assert(np.sum(np.imag(alm[:,:33])) == 0.)
+    np.savez(outfile1, spectrum=spectrum, fractions=fractions, alm=np.real(alm), almi=np.imag(alm[:,33:]))
 
 print('output saved in', outfile1)
