@@ -17,7 +17,7 @@ import lzma
 from os import path, makedirs
 import argparse
 #______________________________________________________________________
-
+normalize_aps = False
 
 # fraction of "from-source" EECRs (0,1];
 Fsrc = None
@@ -39,11 +39,18 @@ add_arg('--data_dir', type=str, help='data root directory (should contain jf/sou
 add_arg('--mf', type=str, help='Magnetic field model (jf or pt)', default='jf')
 add_arg('--start_idx', type=int, help='file idx to start from', default=0)
 add_arg('--alm', action='store_true', help="generate a_lm")
+add_arg('--raw', action='store_true', help="generate raw healpix data")
 add_arg('--l_max', type=int, help='file idx to start from', default=32)
 add_arg('--Nside', type=int, help='healpix grid Nside parameter', default=512)
 add_arg('--Nini', type=int, help='Size of the initial sample of from-source events', default=10000)
+add_arg('--raw_only', action='store_true', help="generate only raw healpix data")
+add_arg('--max_data_size', type=float, help='maximal raw data size in Gb', default=1.)
+
 
 args = cline_parser.parse_args()
+
+if args.raw_only:
+    args.raw = True
 
 if not path.isdir(args.output_dir):
     makedirs(args.output_dir)
@@ -68,9 +75,6 @@ source_id = args.source_id
 #
 # Should be either "asis" (default) or "relins" or "auger"
 healpix_map_method = 'asis'
-
-# Should we anyhow normalize the APS?
-normalize_aps = 0
 
 # Less used initial parameters
 # healpix grid parameter
@@ -127,11 +131,12 @@ print('lmax  = ' + str(lmax))
 print('Neecr = ' + str(Neecr))
 print('Nmixed_samples = ' + str(Nmixed_samples))
 print('Healpix map method: ' + healpix_map_method)
-if normalize_aps>0:
-    print('Normalized spectrum!')
-    norm_text = '_norm'
-else:
-    norm_text = ''
+
+suffix = ''
+if args.raw:
+    suffix += '_raw'
+if normalize_aps:
+    suffix += '_norm'
 
 print('\n')
 
@@ -153,7 +158,7 @@ if Fsrc is not None:
                     + '_Neecr' + str(Neecr)
                     + '_Nsample' + str(Nmixed_samples)
                     + '_Nside' + str(Nside)
-                    + norm_text)
+                    + suffix)
     else:
         outfile1 = ('aps_'
                     + source_id + '_D' + D_src
@@ -164,21 +169,40 @@ if Fsrc is not None:
                     + '_Fsrc{:02d}'.format(int(round(Fsrc * 100)))
                     + '_R' + str(source_vicinity_radius)
                     + '_Nside' + str(Nside)
-                    + norm_text)
+                    + suffix)
 else:
     outfile1 = ('aps_'
-            + source_id + '_D' + D_src
-            + '_B' + args.mf
-            + '_Emin' + str(Emin)
-            + '_Neecr' + str(Neecr)
-            + '_Nsample' + str(Nmixed_samples)
-            + '_R' + str(source_vicinity_radius)
-            + '_Nside' + str(Nside)
-            + norm_text)
+                + source_id + '_D' + D_src
+                + '_B' + args.mf
+                + '_Emin' + str(Emin)
+                + '_Neecr' + str(Neecr)
+                + '_Nsample' + str(Nmixed_samples)
+                + '_R' + str(source_vicinity_radius)
+                + '_Nside' + str(Nside)
+                + suffix)
 
-# A template for C_l, one line per each isotropic sample
-spectrum = np.zeros((Nmixed_samples,lmax+1))
+
+# We need to know the expected flux in a healpix cell if we are
+# calculating the relative intensity map or an Auger-like map
+#Ncells = 12*Nside**2
+Ncells = hp.nside2npix(Nside)
+
+if args.raw:
+    if Ncells*Nmixed_samples/2**30 > args.max_data_size:
+        Nmixed_samples = args.max_data_size * 2**30 / Ncells
+        print('number of samples reduced to', Nmixed_samples)
+
+assert Nmixed_samples>0
+
+# A template for C_l, alm, healpix_map one line per each isotropic sample
+spectrum = None
 alm = None
+raw = None
+if not args.raw_only:
+    spectrum = np.zeros((Nmixed_samples,lmax+1))
+if args.raw:
+    raw = np.zeros((Nmixed_samples, Ncells), dtype=np.uint8)  # save space by using one byte type
+
 fractions = np.zeros((Nmixed_samples,))
 
 for i in range(args.start_idx, args.start_idx + 100000):
@@ -210,10 +234,6 @@ if Fsrc != 0.:
         print('-------> Create one with [convert_]src_sample.py\n')
         sys.exit()
 
-# We need to know the expected flux in a healpix cell if we are
-# calculating the relative intensity map or an Auger-like map
-#Ncells = 12*Nside**2
-Ncells = hp.nside2npix(Nside)
 # if healpix_map_method=='relins':
 #     # expected number of Neecr per cell
 #     expected_flux = float(Neecr)/Ncells
@@ -296,6 +316,14 @@ for i in np.arange(0,Nmixed_samples):
         cells = np.unique(iso_cells,return_counts=True)
         healpix_map[cells[0]] += cells[1]
 
+    if args.raw:
+        raw[i,:] = healpix_map
+
+    fractions[i] = Nsrc / Neecr
+
+    if args.raw_only:
+        continue
+
     # Finally: how do we calculate the spectrum?
     if normalize_aps:
         # Calculate the angular power spectrum. Take twice of lmax
@@ -330,12 +358,10 @@ for i in np.arange(0,Nmixed_samples):
         else:
             spectrum[i,:] = ang_data
 
-    fractions[i] = Nsrc/Neecr
-
 if alm is None:
-    np.savez(outfile1, spectrum=spectrum, fractions=fractions)
+    np.savez(outfile1, spectrum=spectrum, fractions=fractions, raw=raw)
 else:
     assert(np.sum(np.imag(alm[:,:33])) == 0.)
-    np.savez(outfile1, spectrum=spectrum, fractions=fractions, alm=np.real(alm), almi=np.imag(alm[:,33:]))
+    np.savez(outfile1, spectrum=spectrum, fractions=fractions, raw=raw, alm=np.real(alm), almi=np.imag(alm[:,33:]))
 
 print('output saved in', outfile1)

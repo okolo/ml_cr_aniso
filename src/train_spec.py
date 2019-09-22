@@ -63,8 +63,9 @@ if __name__ == '__main__':
     add_arg('--show_fig', action='store_true', help="Show learning curves")
     add_arg('--n_early_stop', type=int, help='number of epochs to monitor for early stop', default=30)
     add_arg('--pretrained', type=str, help='pretrained network', default='')
-    add_arg('--features', type=str, nargs='*', metavar='F', help='features to use (currently available spectrum and/or alm)', default=feature_names)
+    add_arg('--features', type=str, nargs='*', metavar='F', help='features to use (currently available spectrum, alm, raw)', default=feature_names)
     add_arg('--weights', action='store_true', help="Balance set using weights (works for classification mode only)")
+    add_arg('--skip_normalization', action='store_true', help="Do not normalize data")
 
 
     args = cline_parser.parse_args()
@@ -116,7 +117,8 @@ if __name__ == '__main__':
     #     spectrum = np.vstack(spectrum)
     #     fractions = np.hstack(fractions)
 
-    features = normalize_features(features)
+    if not args.skip_normalization:
+        features = normalize_features(features)
 
     xy = np.hstack((features, fractions.reshape(-1, 1)))
     np.random.shuffle(xy)
