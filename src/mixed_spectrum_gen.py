@@ -45,6 +45,9 @@ add_arg('--Nside', type=int, help='healpix grid Nside parameter', default=512)
 add_arg('--Nini', type=int, help='Size of the initial sample of from-source events', default=10000)
 add_arg('--raw_only', action='store_true', help="generate only raw healpix data")
 add_arg('--max_data_size', type=float, help='maximal raw data size in Gb', default=1.)
+add_arg('--log_sample', action='store_true', help="sample f_src uniformly in log scale")
+add_arg('--f_src_max', type=float, help='maximal fraction of "from-source" EECRs [0,1]', default=1)
+add_arg('--f_src_min', type=float, help='minimal fraction of "from-source" EECRs [0,1]', default=0)
 
 
 args = cline_parser.parse_args()
@@ -55,10 +58,28 @@ if args.raw_only:
 if not path.isdir(args.output_dir):
     makedirs(args.output_dir)
 
-if args.f_src >= 0.:
-    Fsrc = args.f_src
-
 Neecr = args.Neecr
+
+if 0 <= args.f_src <= 1.:
+    Fsrc = args.f_src
+else:
+    assert 0 <= args.f_src_min < 1
+    assert 0 < args.f_src_max <= 1
+    assert args.f_src_min < args.f_src_max
+
+    N_src_min = np.round(args.f_src_min * Neecr)
+    N_src_max = np.round(args.f_src_max * Neecr)
+    if N_src_min == N_src_max:
+        Fsrc == N_src_min/Neecr
+    elif args.log_sample:
+        if args.f_src_min == 0:
+            # make sure roughly equal amount of isotropic and mixture samples are generated
+            logNmin = np.log( 1. / N_src_max)
+        else:
+            logNmin = np.log(args.f_src_min * Neecr)
+
+        logNmax = np.log(args.f_src_max * Neecr)
+
 
 Nmixed_samples = args.Nmixed_samples
 
@@ -171,6 +192,12 @@ if Fsrc is not None:
                     + '_Nside' + str(Nside)
                     + suffix)
 else:
+    if args.log_sample:
+        suffix += '_logF_src'
+    if args.f_src_min > 0:
+        suffix += '_f_min' + str(args.f_src_min)
+    if args.f_src_max < 1:
+        suffix += '_f_max' + str(args.f_src_max)
     outfile1 = ('aps_'
                 + source_id + '_D' + D_src
                 + '_B' + args.mf
@@ -258,6 +285,9 @@ if Fsrc is not None:
 #______________________________________________________________________
 # Here we create Nmixed_samples of the mixed flux and calculate
 # their angular power spectra
+
+
+
 print('Generating samples and calculating spectra...')
 for i in np.arange(0,Nmixed_samples):
 
@@ -273,7 +303,12 @@ for i in np.arange(0,Nmixed_samples):
         healpix_map = -1*np.ones(Ncells, dtype=float)
 
     if Fsrc is None:
-        Nsrc = np.random.randint(0, Neecr+1)
+        if args.log_sample:
+            Nsrc = int(np.round(np.exp(logNmin + (logNmax-logNmin)*np.random.rand())))
+            assert N_src_min <= Nsrc <= N_src_max
+        else:
+            Nsrc = np.random.randint(N_src_min, N_src_max+1)
+
         Niso = Neecr - Nsrc
 
     if Nsrc > 0:
