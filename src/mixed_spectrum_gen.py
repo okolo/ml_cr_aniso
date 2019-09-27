@@ -70,7 +70,7 @@ else:
     N_src_min = np.round(args.f_src_min * Neecr)
     N_src_max = np.round(args.f_src_max * Neecr)
     if N_src_min == N_src_max:
-        Fsrc == N_src_min/Neecr
+        Fsrc = N_src_min/Neecr
     elif args.log_sample:
         if args.f_src_min == 0:
             # make sure roughly equal amount of isotropic and mixture samples are generated
