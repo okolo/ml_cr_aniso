@@ -1,6 +1,7 @@
+import nnhealpix
+from nnhealpix.layers import ConvNeighbours, MaxPooling
 import keras
 from keras.layers import Dense, Dropout, BatchNormalization, Reshape, Flatten
-import nnhealpix
 import numpy as np
 
 def assert_valid_nside(nside):
@@ -36,9 +37,9 @@ def create_model(input_dim, nside_min = 32, inner_layer_sizes = [],
             if dropout_rate>0:
                 x = Dropout(rate=dropout_rate)(x)
 
-            x = nnhealpix.layers.ConvNeighbours(nside, filters=n_filters, kernel_size=9)(x)
+            x = ConvNeighbours(nside, filters=n_filters, kernel_size=9)(x)
             x = keras.layers.Activation('relu')(x)
-            x = nnhealpix.layers.MaxPooling(nside, nside // 2)(x)
+            x = MaxPooling(nside, nside // 2)(x)
             nside = nside // 2
 
         if do_conv:

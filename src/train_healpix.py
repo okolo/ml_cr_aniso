@@ -68,7 +68,7 @@ def load_src_sample(args):
     return data
 
 
-def f_sampler(args, n_samples=0):  # if <= 0, sample forever
+def f_sampler(args, n_samples=-1):  # if < 0, sample forever
     Neecr = args.Neecr
     Fsrc = None
     if 0 <= args.f_src <= 1.:
@@ -105,13 +105,24 @@ def f_sampler(args, n_samples=0):  # if <= 0, sample forever
 
         Niso = Neecr - Nsrc
         yield (Nsrc, Niso)
+        n += 1
 
 class SampleGenerator(keras.utils.Sequence):
-    def __init__(self, args):
+    def __init__(self, args, deterministic=None, seed=0, n_samples=None):
+        self.seed = seed
+
         self.add_iso = args.f_src_min > 0 or not args.log_sample
 
-        self.n_batchs = int(np.ceil(args.n_samples / args.batch_size))
-        batch_size = int(np.round(args.n_samples / self.n_batchs))
+        if n_samples is None:
+            n_samples = args.n_samples
+
+        if deterministic is None:
+            deterministic = not args.random
+
+        self.deterministic = deterministic
+
+        self.n_batchs = int(np.ceil(n_samples / args.batch_size))
+        batch_size = int(np.round(n_samples / self.n_batchs))
         if self.add_iso:
             batch_size = (batch_size//2)*2  # make sure batch_size is divisible of 2
 
@@ -136,16 +147,20 @@ class SampleGenerator(keras.utils.Sequence):
         # These are numbers of cells on the healpix grid occupied by the
         # nuclei in the infile
         self.healpix_src_cells = data[nonz, 7].astype(int)
-
+        self.Nside = args.Nside
+        self.threshold = args.threshold
 
     def __len__(self):
         return self.n_batchs
 
     def __getitem__(self, idx):
+        if self.deterministic:
+            np.random.seed(idx + self.seed)
+
         healpix_map = np.zeros((self.batch_size, self.Ncells), dtype=float)
-        fractions = np.zeros(self.batch_size)
-        for i in np.arange(0, self.batch_size):
-            if self.add_iso and i%2 == 0:
+        answers = np.zeros(self.batch_size)
+        for i in range(self.batch_size):
+            if self.add_iso and i % 2 == 0:
                 Nsrc = 0
                 Niso = args.Neecr
             else:
@@ -166,7 +181,7 @@ class SampleGenerator(keras.utils.Sequence):
                 # It consists of two arrays: [0] is a list of unique cells,
                 # [1] is their multiplicity.
                 cells = np.unique(src_cells, return_counts=True)
-                healpix_map[cells[0]] += cells[1]
+                healpix_map[i, cells[0]] += cells[1]
 
             if Niso > 0:
                 # A sample of events from the isotropic background
@@ -181,28 +196,25 @@ class SampleGenerator(keras.utils.Sequence):
                 # healpix_map[iso_cells] = 1
                 # Similar to the above
                 cells = np.unique(iso_cells, return_counts=True)
-                healpix_map[cells[0]] += cells[1]
+                healpix_map[i, cells[0]] += cells[1]
 
-            if args.raw:
-                pass
-                # raw[i,:] = healpix_map
+            answers[i] = (Nsrc / self.Neecr > self.threshold)
 
-            fractions[i] = Nsrc / self.Neecr
-            return fractions, healpix_map
+        return healpix_map, answers
 
 
-class TestSampleGenerator(keras.utils.Sequence):
-    def __init__(self, gen: SampleGenerator, seed=0, n_batches=10):
-        self.gen = gen
-        self.seed = seed
-        self.n_batches = n_batches
-
-    def __len__(self):
-        return self.n_batches
-
-    def __getitem__(self, idx):
-        np.random.seed(idx + self.seed)
-        return self.gen.__getitem__(idx)
+# class TestSampleGenerator(keras.utils.Sequence):
+#     def __init__(self,   gen: SampleGenerator, seed=0, n_batches=10):
+#         self.gen = gen
+#         self.seed = seed
+#         self.n_batches = n_batches
+#
+#     def __len__(self):
+#         return self.n_batches
+#
+#     def __getitem__(self, idx):
+#         np.random.seed(idx + self.seed)
+#         return self.gen.__getitem__(idx)
 
 def plot_learning_curves(history, save_file=None):
     metrics = ['loss'] + [m for m in history.history if m != 'loss' and not m.startswith('val_')]
@@ -239,22 +251,27 @@ if __name__ == '__main__':
     add_arg('--data_dir', type=str, help='data root directory (should contain jf/sources/ or pt/sources/)',
             default='data')
     add_arg('--mf', type=str, help='Magnetic field model (jf or pt)', default='jf')
-    add_arg('--Nside', type=int, help='healpix grid Nside parameter', default=512)
+    add_arg('--Nside', type=int, help='healpix grid Nside parameter', default=64)
     add_arg('--Nini', type=int, help='Size of the initial sample of from-source events', default=10000)
     add_arg('--log_sample', action='store_true', help="sample f_src uniformly in log scale")
     add_arg('--f_src_max', type=float, help='maximal fraction of "from-source" EECRs [0,1]', default=1)
     add_arg('--f_src_min', type=float, help='minimal fraction of "from-source" EECRs [0,1]', default=0)
     add_arg('--layers', type=str, help='comma-separated list of inner layer sizes', default='')
     add_arg('--output_prefix', type=str, help='output model file path prefix', default='')
-    add_arg('--batch_size', type=int, help='size of training batch', default=1000)
-    add_arg('--n_epochs', type=int, help='number of training epochs', default=100000)
+    add_arg('--batch_size', type=int, help='size of training batch', default=100)
+    add_arg('--n_epochs', type=int, help='number of training epochs', default=1000)
     add_arg('--show_fig', action='store_true', help="Show learning curves")
     add_arg('--n_early_stop', type=int, help='number of epochs to monitor for early stop', default=30)
     add_arg('--pretrained', type=str, help='pretrained network', default='')
     add_arg('--loss', type=str, help='NN loss', default='binary_crossentropy')
     add_arg('--metrics', type=str, help='NN metrics', default='accuracy')
-    add_arg('--n_samples', type=str, help='number of samples', default=100000)
+    add_arg('--n_samples', type=str, help='number of samples', default=50000)
     add_arg('--nside_min', type=str, help='minimal Nside for convolution', default=32)
+    add_arg('--source_vicinity_radius', type=str, help='source vicinity radius', default='1')
+    add_arg('--threshold', type=float,
+            help='source fraction threshold for binary classification', default=0.0)
+    add_arg('--random', action='store_true', help="use random batches (default is deterministic)")
+
 
     args = cline_parser.parse_args()
 
@@ -268,9 +285,9 @@ if __name__ == '__main__':
 
     args.loss = get_loss(args.loss)
 
-    train_gen = SampleGenerator(args)
-    val_gen = TestSampleGenerator(train_gen)
-    test_gen = TestSampleGenerator(train_gen, seed=100000)
+    train_gen = SampleGenerator(args, seed=0)
+    val_gen = SampleGenerator(args, deterministic=True, seed=2**20, n_samples=max(1000, args.n_samples//10))
+    test_gen = SampleGenerator(args, deterministic=True, seed=2**26, n_samples=max(1000, args.n_samples//10))
 
 
     def train_model(model, save_name, epochs=400, verbose=1, n_early_stop_epochs=30, batch_size=1024):
@@ -320,6 +337,8 @@ if __name__ == '__main__':
         n_side_min = min(args.Nside, args.nside_min)
         l_first = 12*n_side_min*n_side_min
         save_name = args.output_prefix + 'Nside_{}-{}'.format(args.Nside, n_side_min) + "_L" + '_'.join([str(i) for i in [l_first] + inner_layers])
+        if args.threshold > 0:
+            save_name += '_th' + str(args.threshold)
 
     train_model(model, save_name, batch_size=args.batch_size, epochs=args.n_epochs, n_early_stop_epochs=args.n_early_stop)
 
