@@ -331,7 +331,7 @@ def main():
             default='data')
     add_arg('--mf', type=str, help='Magnetic field model (jf or pt)', default='jf')
     add_arg('--compare_mf', type=str, help='Magnetic field model to compare with (jf or pt)', default='')
-    add_arg('--Nside', type=int, help='healpix grid Nside parameter', default=64)
+    add_arg('--Nside', type=int, help='healpix grid Nside parameter', default=32)
     add_arg('--Nini', type=int, help='Size of the initial sample of from-source events', default=10000)
     add_arg('--log_sample', action='store_true', help="sample f_src uniformly in log scale")
     add_arg('--f_src_max', type=float, help='maximal fraction of "from-source" EECRs [0,1]', default=1)
@@ -346,7 +346,8 @@ def main():
     add_arg('--loss', type=str, help='NN loss', default='binary_crossentropy')
     add_arg('--monitor', type=str, help='NN metrics: used for early stop val_loss/frac/frac_compare', default='frac')
     add_arg('--n_samples', type=int, help='number of samples', default=50000)
-    add_arg('--nside_min', type=int, help='minimal Nside for convolution', default=32)
+    add_arg('--nside_min', type=int, help='minimal Nside for convolution', default=1)
+    add_arg('--n_filters', type=int, help='number of filters for convolution', default=32)
     add_arg('--source_vicinity_radius', type=str, help='source vicinity radius', default='1')
     add_arg('--threshold', type=float,
             help='source fraction threshold for binary classification', default=0.0)
@@ -468,8 +469,8 @@ def main():
 
             print('training_time_sec', t, file=out)
 
-    model = create_model(train_gen.Ncells, nside_min=args.nside_min, inner_layer_sizes=inner_layers,
-                         pretrained=args.pretrained)
+    model = create_model(train_gen.Ncells, nside_min=args.nside_min, n_filters=args.n_filters,
+                         inner_layer_sizes=inner_layers, pretrained=args.pretrained)
 
 
 
@@ -478,9 +479,10 @@ def main():
         save_name = args.pretrained[:-3]
     else:
         n_side_min = min(args.Nside, args.nside_min)
-        l_first = 12*n_side_min*n_side_min
-        save_name = args.output_prefix + '{}_B{}_Ns{}-{}'.format(args.source_id, args.mf, args.Nside, n_side_min) +\
-                    "_L" + '_'.join([str(i) for i in [l_first] + inner_layers])
+        save_name = args.output_prefix + '{}_B{}_Ns{}-{}_F{}'.format(args.source_id, args.mf, args.Nside,
+                                                                     n_side_min, args.n_filters)
+        if len(inner_layers) > 0:
+            save_name += ("_L" + '_'.join([str(i) for i in inner_layers]))
         if args.threshold > 0:
             save_name += '_th' + str(args.threshold)
 
