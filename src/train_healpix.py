@@ -6,7 +6,7 @@ import time
 import matplotlib
 from os import path, remove
 import healpy as hp
-from sys import stderr
+from sys import stderr, stdout
 from cnn_healpix import create_model
 
 def get_loss(loss):
@@ -47,25 +47,24 @@ def get_source_data(source_id):
         raise ValueError('Unknown source!')
     return source_lon, source_lat, D_src
 
-def load_src_sample(args):
+def load_src_sample(args, suffix = ''):
     import lzma
+    import glob
     _, _, D_src = get_source_data(args.source_id)
 
-    infile = ('src_sample_' + args.source_id + '_D' + D_src
+    infiles = ('src_sample_' + args.source_id + '_D' + D_src
               + '_Emin' + str(args.Emin)
               + '_N' + str(args.Nini)
               + '_R' + str(args.source_vicinity_radius)
-              + '_Nside' + str(args.Nside)
+              + '_Nside' + str(args.Nside) + suffix
               + '.txt.xz')
-    infile = args.data_dir + '/' + args.mf + '/sources/' + infile
-    try:
+    infiles = args.data_dir + '/' + args.mf + '/sources/' + infiles
+    files = list(glob.glob(infiles))
+    if len(files) == 0:
+        raise ValueError(infiles + ' file(s) not found!')
+    for infile in files:
         with lzma.open(infile, 'rt') as f:
-            data = np.genfromtxt(f, dtype=float)
-    except IOError:
-        print('\n-------> ' + infile + ' file not found!')
-        print('-------> Create one with [convert_]src_sample.py\n')
-        exit(1)
-    return data
+            yield np.genfromtxt(f, dtype=float)
 
 
 def f_sampler(args, n_samples=-1):  # if < 0, sample forever
@@ -108,7 +107,7 @@ def f_sampler(args, n_samples=-1):  # if < 0, sample forever
         n += 1
 
 class SampleGenerator(keras.utils.Sequence):
-    def __init__(self, args, deterministic=None, seed=0, n_samples=None, return_frac=False):
+    def __init__(self, args, deterministic=None, seed=0, n_samples=None, return_frac=False, suffix='*'):
         self.seed = seed
         self.return_frac = return_frac
         self.add_iso = args.f_src_min > 0 or not args.log_sample
@@ -117,7 +116,7 @@ class SampleGenerator(keras.utils.Sequence):
             n_samples = args.n_samples
 
         if deterministic is None:
-            deterministic = not args.random
+            deterministic = args.deterministic
 
         self.deterministic = deterministic
 
@@ -131,7 +130,7 @@ class SampleGenerator(keras.utils.Sequence):
 
         self.batch_size = batch_size
 
-        data = load_src_sample(args)
+        data_list = list(load_src_sample(args, suffix=suffix))
         self.Neecr = args.Neecr
         #self.n_batches = n_batches
 
@@ -139,14 +138,17 @@ class SampleGenerator(keras.utils.Sequence):
         self.sampler = f_sampler(args)
 
         # 2. Find non-zero lines, i.e., those with Z>0:
-        tp = np.arange(0, np.size(data[:, 0]))
-        nonz = tp[data[:, 5] > 0]
-        self.nonz_number = len(nonz)
-        assert self.nonz_number >= args.Neecr
+        self.healpix_src_cells = []
+        self.nonz_number = []
+        for data in data_list:
+            tp = np.arange(0, np.size(data[:, 0]))
+            nonz = tp[data[:, 5] > 0]
+            assert len(nonz) >= args.Neecr
+            self.nonz_number.append(len(nonz))
+            # These are numbers of cells on the healpix grid occupied by the
+            # nuclei in the infile
+            self.healpix_src_cells.append(data[nonz, 7].astype(int))
 
-        # These are numbers of cells on the healpix grid occupied by the
-        # nuclei in the infile
-        self.healpix_src_cells = data[nonz, 7].astype(int)
         self.Nside = args.Nside
         self.threshold = args.threshold
 
@@ -167,11 +169,17 @@ class SampleGenerator(keras.utils.Sequence):
                 Nsrc, Niso = self.sampler.__next__()
 
             if Nsrc > 0:
+                file_idx = 0
+                if len(self.nonz_number) > 1:
+                    file_idx = np.random.randint(0, len(self.nonz_number))
+                nonz_number = self.nonz_number[file_idx]
+                healpix_src_cells = self.healpix_src_cells[file_idx]
+
                 # Create a random sample of from-source events:
-                src_sample = np.random.choice(self.nonz_number, Nsrc, replace=False)
+                src_sample = np.random.choice(nonz_number, Nsrc, replace=False)
 
                 # Cells of the healpix grid "occupied" by the from-source sample
-                src_cells = self.healpix_src_cells[src_sample]
+                src_cells = healpix_src_cells[src_sample]
 
                 # This is a simple way to define the map. It assumes
                 # only one EECR gets in a cell. Works OK for Nside=512.
@@ -322,6 +330,7 @@ def main():
     add_arg('--data_dir', type=str, help='data root directory (should contain jf/sources/ or pt/sources/)',
             default='data')
     add_arg('--mf', type=str, help='Magnetic field model (jf or pt)', default='jf')
+    add_arg('--compare_mf', type=str, help='Magnetic field model to compare with (jf or pt)', default='')
     add_arg('--Nside', type=int, help='healpix grid Nside parameter', default=64)
     add_arg('--Nini', type=int, help='Size of the initial sample of from-source events', default=10000)
     add_arg('--log_sample', action='store_true', help="sample f_src uniformly in log scale")
@@ -335,13 +344,13 @@ def main():
     add_arg('--n_early_stop', type=int, help='number of epochs to monitor for early stop', default=10)
     add_arg('--pretrained', type=str, help='pretrained network', default='')
     add_arg('--loss', type=str, help='NN loss', default='binary_crossentropy')
-    add_arg('--monitor', type=str, help='NN metrics: used for early stop val_loss/frac', default='frac')
+    add_arg('--monitor', type=str, help='NN metrics: used for early stop val_loss/frac/frac_compare', default='frac')
     add_arg('--n_samples', type=int, help='number of samples', default=50000)
     add_arg('--nside_min', type=int, help='minimal Nside for convolution', default=32)
     add_arg('--source_vicinity_radius', type=str, help='source vicinity radius', default='1')
     add_arg('--threshold', type=float,
             help='source fraction threshold for binary classification', default=0.0)
-    add_arg('--random', action='store_true', help="use random batches (default is deterministic)")
+    add_arg('--deterministic', action='store_true', help="use deterministic batches for training (default is random)")
     add_arg('--alpha', type=float, help='type 1 maximal error', default=0.01)
     add_arg('--beta', type=float, help='type 2 maximal error', default=0.05)
 
@@ -357,14 +366,32 @@ def main():
 
     train_gen = SampleGenerator(args, seed=0)
     val_gen = SampleGenerator(args, deterministic=True, seed=2**20, n_samples=max(1000, args.n_samples//10))
-    test_gen = SampleGenerator(args, deterministic=True, seed=2**26, n_samples=max(10000, args.n_samples//5))
-    # detectable_fraction_data = [None, None]
-    #
-    # def detectable_frac(y_true, y_predicted):  # arguments are not used
-    #     frac, alpha = calc_detectable_frac(test_gen, model, args)
-    #     detectable_fraction_data[0] = frac
-    #     detectable_fraction_data[1] = alpha
-    #     return frac
+    test_gen = SampleGenerator(args, deterministic=True, seed=2**26, n_samples=max(10000, args.n_samples))
+
+    frac_gen = test_gen
+    frac_mf = args.mf
+
+    test_b_gen = None
+    if len(args.compare_mf)==0:
+        args.compare_mf = 'pt' if args.mf == 'jf' else 'jf'
+
+    compare_mf = args.compare_mf
+
+    mf = args.mf
+    args.mf = args.compare_mf
+    try:
+        test_b_gen = SampleGenerator(args, deterministic=True, seed=2**26, n_samples=max(10000, args.n_samples))
+        if args.monitor == 'frac_compare':
+            frac_gen = test_b_gen
+            test_b_gen = test_gen
+            frac_mf = args.compare_mf
+            compare_mf = mf
+    except ValueError as ver:
+        print(args.compare_mf, 'field test will be skipped:', str(ver))
+        if args.monitor == 'frac_compare':
+            args.monitor == 'frac'
+
+    args.mf = mf
 
     def train_model(model, save_name, epochs=400, verbose=1, n_early_stop_epochs=30, batch_size=1024):
         for i in range(100000):
@@ -380,25 +407,27 @@ def main():
         print('#epoch\tfracs\talpha', file=frac_log)
 
         fracs = []
+        alphas = []
 
         def frac_logging_callback(epoch, logs):
-            frac, alpha = calc_detectable_frac(test_gen, model, args)
+            frac, alpha = calc_detectable_frac(frac_gen, model, args)
             print(epoch, frac, alpha, file=frac_log)
             print('Detectable fraction:', frac, '\talpha =', alpha)
-            if args.monitor == 'frac':
+            if args.monitor.startswith('frac'):
                 if len(fracs) == 0 or min(fracs) > frac:
                     model.save_weights(weights_file, overwrite=True)
                 elif len(fracs) - fracs.index(min(fracs)) >= n_early_stop_epochs:
                     model.stop_training = True
                     print('Early stop on epoch', epoch)
             fracs.append(frac)
+            alphas.append(alpha)
 
         callbacks = []
         if n_early_stop_epochs > 0:
             callbacks = [
                 keras.callbacks.LambdaCallback(on_epoch_end=frac_logging_callback),
             ]
-            if args.monitor != 'frac':
+            if not args.monitor.startswith('frac'):
                 keras.callbacks.ModelCheckpoint(weights_file, save_best_only=True, monitor=args.monitor,
                                                 save_weights_only=True),  # save best model
 
@@ -417,28 +446,46 @@ def main():
         print('Model saved in', save_path)
 
         plot_learning_curves(history, save_file=save_path[:-3] + '_train.png', show_fig=args.show_fig)
-
         score = model.evaluate_generator(test_gen, verbose=0)
+
+        test_frac = test_alpha = None
+        if test_b_gen is not None:
+            print('testing on', compare_mf, 'field')
+            test_frac, test_alpha = calc_detectable_frac(test_b_gen, model, args)
 
         with open(save_path + '.score', mode='w') as out:
             for name, sc in zip(model.metrics_names, score):
                 print(name, sc, file=out)
                 print(name, sc)
+            f = min(fracs)
+            a = alphas[fracs.index(min(fracs))]
+            for file in [out, stdout]:
+                print('frac_' + frac_mf, f, file=file)
+                print('alpha' + frac_mf, a, file=file)
+                if test_frac is not None:
+                    print('frac_' + compare_mf, test_frac, file=file)
+                    print('alpha_' + compare_mf, test_alpha, file=file)
+
             print('training_time_sec', t, file=out)
 
     model = create_model(train_gen.Ncells, nside_min=args.nside_min, inner_layer_sizes=inner_layers,
                          pretrained=args.pretrained)
+
+
+
 
     if args.pretrained and len(args.output_prefix) == 0:
         save_name = args.pretrained[:-3]
     else:
         n_side_min = min(args.Nside, args.nside_min)
         l_first = 12*n_side_min*n_side_min
-        save_name = args.output_prefix + 'Nside_{}-{}'.format(args.Nside, n_side_min) + "_L" + '_'.join([str(i) for i in [l_first] + inner_layers])
+        save_name = args.output_prefix + '{}_B{}_Ns{}-{}'.format(args.source_id, args.mf, args.Nside, n_side_min) +\
+                    "_L" + '_'.join([str(i) for i in [l_first] + inner_layers])
         if args.threshold > 0:
             save_name += '_th' + str(args.threshold)
 
-    train_model(model, save_name, batch_size=args.batch_size, epochs=args.n_epochs, n_early_stop_epochs=args.n_early_stop)
+    train_model(model, save_name, batch_size=args.batch_size, epochs=args.n_epochs,
+                n_early_stop_epochs=args.n_early_stop)
 
 if __name__ == '__main__':
     main()
