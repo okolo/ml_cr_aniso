@@ -108,5 +108,8 @@ while r > l + 2:
         break
     i = (l + r) // 2
 
+if beta(i) > args.beta:
+    i += 1
+
 print(fracs[i], alpha(i))
 exit(0)

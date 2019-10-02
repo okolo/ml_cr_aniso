@@ -108,9 +108,9 @@ def f_sampler(args, n_samples=-1):  # if < 0, sample forever
         n += 1
 
 class SampleGenerator(keras.utils.Sequence):
-    def __init__(self, args, deterministic=None, seed=0, n_samples=None):
+    def __init__(self, args, deterministic=None, seed=0, n_samples=None, return_frac=False):
         self.seed = seed
-
+        self.return_frac = return_frac
         self.add_iso = args.f_src_min > 0 or not args.log_sample
 
         if n_samples is None:
@@ -162,7 +162,7 @@ class SampleGenerator(keras.utils.Sequence):
         for i in range(self.batch_size):
             if self.add_iso and i % 2 == 0:
                 Nsrc = 0
-                Niso = args.Neecr
+                Niso = self.Neecr
             else:
                 Nsrc, Niso = self.sampler.__next__()
 
@@ -198,25 +198,15 @@ class SampleGenerator(keras.utils.Sequence):
                 cells = np.unique(iso_cells, return_counts=True)
                 healpix_map[i, cells[0]] += cells[1]
 
-            answers[i] = (Nsrc / self.Neecr > self.threshold)
+            answers[i] = Nsrc / self.Neecr
+
+        if not self.return_frac:
+            answers = (answers > self.threshold)
 
         return healpix_map, answers
 
-
-# class TestSampleGenerator(keras.utils.Sequence):
-#     def __init__(self,   gen: SampleGenerator, seed=0, n_batches=10):
-#         self.gen = gen
-#         self.seed = seed
-#         self.n_batches = n_batches
-#
-#     def __len__(self):
-#         return self.n_batches
-#
-#     def __getitem__(self, idx):
-#         np.random.seed(idx + self.seed)
-#         return self.gen.__getitem__(idx)
-
-def plot_learning_curves(history, save_file=None):
+def plot_learning_curves(history, save_file=None, show_fig=False):
+    import matplotlib.pyplot as plt
     metrics = ['loss'] + [m for m in history.history if m != 'loss' and not m.startswith('val_')]
 
     for i, m in enumerate(metrics):
@@ -230,12 +220,93 @@ def plot_learning_curves(history, save_file=None):
         plt.savefig(save_file)
 
     try:
-        if args.show_fig:
+        if show_fig:
             plt.show()
     except Exception:
         pass
 
-if __name__ == '__main__':
+def calc_detectable_frac(gen, model, args):
+    save = gen.return_frac
+    gen.return_frac = True
+    frac = xi = None
+    for batch in range(len(gen)):
+        maps, batch_frac = gen.__getitem__(batch)
+        batch_xi = model.predict(maps).flatten()
+        if batch == 0:
+            frac = batch_frac
+            xi = batch_xi
+        else:
+            frac = np.concatenate((frac, batch_frac))
+            xi = np.concatenate((xi, batch_xi))
+
+    gen.return_frac = save
+
+    src = frac > 0
+    iso = np.logical_not(src)
+    iso_xi = xi[iso]
+    fractions = frac[src]
+    xi = xi[src]
+
+    if np.mean(iso_xi) > np.mean(xi):  # below we assume <iso_xi>  <=  <xi>
+        xi *= -1.
+        iso_xi *= -1.
+
+    alpha_thr = np.quantile(iso_xi, 1. - args.alpha)
+
+    # sort by xi
+    idx = np.argsort(xi)
+    fractions = fractions[idx]
+    xi = xi[idx]
+
+    thr_idx = np.where(xi >= alpha_thr)[0][0]
+
+    fracs = sorted(list(set(fractions)))
+
+    def beta(i_f):
+        idx = np.where(fractions >= fracs[i_f])[0]
+        idx_left = np.where(idx < thr_idx)[0]
+        return len(idx_left) / len(idx)
+
+    def alpha(i_f):
+        thr = np.quantile(xi[fractions >= fracs[i_f]], args.beta)
+        idx_right = np.where(iso_xi > thr)[0]
+        return len(idx_right) / len(iso_xi)
+
+    l = 0
+    r = len(fracs) - 1
+
+    beta_l = beta(l)
+    beta_r = beta(r)
+
+    if beta_r > args.beta:
+        print('solution not found', file=stderr)
+        return 1., 1.
+
+    if beta_r == args.beta:
+        l = r
+
+    if beta_l <= args.beta:
+        print('all mixed samples satisfy criterion', file=stderr)
+        r = l
+
+    i = (l + r) // 2
+
+    while r > l + 2:
+        b = beta(i)
+        if b > args.beta:
+            l = i
+        elif b < args.beta:
+            r = i
+        else:
+            break
+        i = (l + r) // 2
+
+    if beta(i) > args.beta:
+        i += 1
+
+    return fracs[i], alpha(i)
+
+def main():
     cline_parser = argparse.ArgumentParser(description='Train network')
 
 
@@ -261,16 +332,18 @@ if __name__ == '__main__':
     add_arg('--batch_size', type=int, help='size of training batch', default=100)
     add_arg('--n_epochs', type=int, help='number of training epochs', default=1000)
     add_arg('--show_fig', action='store_true', help="Show learning curves")
-    add_arg('--n_early_stop', type=int, help='number of epochs to monitor for early stop', default=30)
+    add_arg('--n_early_stop', type=int, help='number of epochs to monitor for early stop', default=10)
     add_arg('--pretrained', type=str, help='pretrained network', default='')
     add_arg('--loss', type=str, help='NN loss', default='binary_crossentropy')
-    add_arg('--metrics', type=str, help='NN metrics', default='accuracy')
-    add_arg('--n_samples', type=str, help='number of samples', default=50000)
-    add_arg('--nside_min', type=str, help='minimal Nside for convolution', default=32)
+    add_arg('--monitor', type=str, help='NN metrics: used for early stop val_loss/frac', default='frac')
+    add_arg('--n_samples', type=int, help='number of samples', default=50000)
+    add_arg('--nside_min', type=int, help='minimal Nside for convolution', default=32)
     add_arg('--source_vicinity_radius', type=str, help='source vicinity radius', default='1')
     add_arg('--threshold', type=float,
             help='source fraction threshold for binary classification', default=0.0)
     add_arg('--random', action='store_true', help="use random batches (default is deterministic)")
+    add_arg('--alpha', type=float, help='type 1 maximal error', default=0.01)
+    add_arg('--beta', type=float, help='type 2 maximal error', default=0.05)
 
 
     args = cline_parser.parse_args()
@@ -278,17 +351,20 @@ if __name__ == '__main__':
     if not args.show_fig:
         matplotlib.use('Agg')  # enable figure generation without running X server session
 
-
-    import matplotlib.pyplot as plt
-
     inner_layers = [int(l) for l in args.layers.split(',') if len(l) > 0]
 
     args.loss = get_loss(args.loss)
 
     train_gen = SampleGenerator(args, seed=0)
     val_gen = SampleGenerator(args, deterministic=True, seed=2**20, n_samples=max(1000, args.n_samples//10))
-    test_gen = SampleGenerator(args, deterministic=True, seed=2**26, n_samples=max(1000, args.n_samples//10))
-
+    test_gen = SampleGenerator(args, deterministic=True, seed=2**26, n_samples=max(10000, args.n_samples//5))
+    # detectable_fraction_data = [None, None]
+    #
+    # def detectable_frac(y_true, y_predicted):  # arguments are not used
+    #     frac, alpha = calc_detectable_frac(test_gen, model, args)
+    #     detectable_fraction_data[0] = frac
+    #     detectable_fraction_data[1] = alpha
+    #     return frac
 
     def train_model(model, save_name, epochs=400, verbose=1, n_early_stop_epochs=30, batch_size=1024):
         for i in range(100000):
@@ -299,14 +375,34 @@ if __name__ == '__main__':
                 break
 
         weights_file = '/tmp/' + path.basename(save_path) + '_best_weights.h5'
+        frac_log_file = save_path[:-3] + '_det_frac.txt'
+        frac_log = open(frac_log_file, mode='wt', buffering=1)
+        print('#epoch\tfracs\talpha', file=frac_log)
+
+        fracs = []
+
+        def frac_logging_callback(epoch, logs):
+            frac, alpha = calc_detectable_frac(test_gen, model, args)
+            print(epoch, frac, alpha, file=frac_log)
+            print('Detectable fraction:', frac, '\talpha =', alpha)
+            if args.monitor == 'frac':
+                if len(fracs) == 0 or min(fracs) > frac:
+                    model.save_weights(weights_file, overwrite=True)
+                elif len(fracs) - fracs.index(min(fracs)) >= n_early_stop_epochs:
+                    model.stop_training = True
+                    print('Early stop on epoch', epoch)
+            fracs.append(frac)
 
         callbacks = []
         if n_early_stop_epochs > 0:
             callbacks = [
-                keras.callbacks.ModelCheckpoint(weights_file, save_best_only=True, save_weights_only=True),
-                # save best model
-                keras.callbacks.EarlyStopping(monitor='val_loss', patience=n_early_stop_epochs, verbose=1)  # early stop
+                keras.callbacks.LambdaCallback(on_epoch_end=frac_logging_callback),
             ]
+            if args.monitor != 'frac':
+                keras.callbacks.ModelCheckpoint(weights_file, save_best_only=True, monitor=args.monitor,
+                                                save_weights_only=True),  # save best model
+
+                callbacks += keras.callbacks.EarlyStopping(monitor=args.monitor, patience=n_early_stop_epochs, verbose=1)  # early stop
         t = time.time()
 
         history = model.fit_generator(train_gen, epochs=epochs, verbose=verbose,
@@ -320,7 +416,7 @@ if __name__ == '__main__':
         model.save(save_path)
         print('Model saved in', save_path)
 
-        plot_learning_curves(history, save_file=save_path[:-3] + '_train.png')
+        plot_learning_curves(history, save_file=save_path[:-3] + '_train.png', show_fig=args.show_fig)
 
         score = model.evaluate_generator(test_gen, verbose=0)
 
@@ -330,7 +426,9 @@ if __name__ == '__main__':
                 print(name, sc)
             print('training_time_sec', t, file=out)
 
-    model = create_model(train_gen.Ncells, nside_min=args.nside_min, inner_layer_sizes=inner_layers, pretrained=args.pretrained)
+    model = create_model(train_gen.Ncells, nside_min=args.nside_min, inner_layer_sizes=inner_layers,
+                         pretrained=args.pretrained)
+
     if args.pretrained and len(args.output_prefix) == 0:
         save_name = args.pretrained[:-3]
     else:
@@ -341,4 +439,7 @@ if __name__ == '__main__':
             save_name += '_th' + str(args.threshold)
 
     train_model(model, save_name, batch_size=args.batch_size, epochs=args.n_epochs, n_early_stop_epochs=args.n_early_stop)
+
+if __name__ == '__main__':
+    main()
 
