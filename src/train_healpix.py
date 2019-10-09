@@ -479,7 +479,7 @@ def main():
         save_name = args.pretrained[:-3]
     else:
         n_side_min = min(args.Nside, args.nside_min)
-        save_name = args.output_prefix + '{}_B{}_Ns{}-{}_F{}'.format(args.source_id, args.mf, args.Nside,
+        save_name = args.output_prefix + '{}_N{}_B{}_Ns{}-{}_F{}'.format(args.source_id, args.Neecr, args.mf, args.Nside,
                                                                      n_side_min, args.n_filters)
         if len(inner_layers) > 0:
             save_name += ("_L" + '_'.join([str(i) for i in inner_layers]))
