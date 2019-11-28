@@ -1,0 +1,54 @@
+1) Генерируем npz-файлы с примерами
+смешенным:
+python3 mixed_spectrum_gen.py --Neecr 50 --Nmixed_samples 100000 --source_id CenA --log_sample --f_src_min 1e-2
+( результат выполнения, файл aps_CenA_D3.5_Bjf_Emin56_Neecr50_Nsample100000_R1_Nside512_logF_src_f_min0.01_0.npz)
+и изотропным:
+python3 mixed_spectrum_gen.py --Neecr 50 --Nmixed_samples 100000 --source_id CenA --f_src 0
+( результат выполнения, файл iso_Neecr50_Nsample100000_Nside512_0.npz )
+
+2) указываем в строке 5 train_spec.py файл, с примерами, по которым будет
+вычислена и зафиксирована нормировка. Это может быть один из
+сгенерированных на первом шаге файлов, например
+norm_file = 'aps_CenA_D3.5_Bjf_Emin56_Neecr50_Nsample100000_R1_Nside512_logF_src_f_min0.01_0.npz'
+
+3) тренируем сетку (в качестве параметров командной строки указываем все файлы, сгенерированные на шаге 1)
+python3 train_spec.py aps_CenA_D3.5_Bjf_Emin56_Neecr50_Nsample100000_R1_Nside512_logF_src_f_min0.01_0.npz iso_Neecr50_Nsample100000_Nside512_0.npz
+
+это самый долгий шаг. Его можно ускорить, если уменьшить число эпох для ранней остановки (параметр командной строки --n_early_stop XX, по умолчанию 30)
+В конце выводится сообщение
+
+Epoch XXX: early stopping
+Training took XXX sec
+Model saved in spectrum_L33_th0.01_v0.h5
+loss XXX
+acc XXX
+
+В файле  spectrum_L33_th0.01_v0.h5 сохранена сетка
+
+4) генерируем тестовые примеры (см. шаг 1)
+( результат выполнения, файлы
+aps_CenA_D3.5_Bjf_Emin56_Neecr50_Nsample100000_R1_Nside512_logF_src_f_min0.01_1.npz, iso_Neecr50_Nsample100000_Nside512_1.npz
+)
+
+5) вычисляем тестовую статистику на тестовых примерах
+python3 nn_f_spec.py aps_CenA_D3.5_Bjf_Emin56_Neecr50_Nsample100000_R1_Nside512_logF_src_f_min0.01_1.npz iso_Neecr50_Nsample100000_Nside512_1.npz --model spectrum_L33_th0.01_v0.h5
+
+результат выполнения - файлы
+spectrum_L33_th0.01_v0__aps_CenA_D3.5_Bjf_Emin56_Neecr50_Nsample100000_R1_Nside512_logF_src_f_min0.01_1.npz
+spectrum_L33_th0.01_v0__iso_Neecr50_Nsample100000_Nside512_1.npz
+
+6) вычисляем детектируемые доли событий
+python3 calc_fractions.py --mixed
+spectrum_L33_th0.01_v0__aps_CenA_D3.5_Bjf_Emin56_Neecr50_Nsample100000_R1_Nside512_logF_src_f_min0.01_1.npz --iso spectrum_L33_th0.01_v0__iso_Neecr50_Nsample100000_Nside512_1.npz
+
+результат выполнения:
+detectable_fraction, alpha
+(соответствуют числам из таблиц 1 и 2 нашей первой статьи)
+
+Вместо нейронной сети можно использовать любую тестовую статистику,
+для этого вместо шага 5) выполнить команду
+python3 f_spec.py aps_CenA_D3.5_Bjf_Emin56_Neecr50_Nsample100000_R1_Nside512_logF_src_f_min0.01_1.npz iso_Neecr50_Nsample100000_Nside512_1.npz
+предварительно определив тестовую статистику в файле  f_spec.py строка 42
+в функции
+def f(spec):
+    ......
