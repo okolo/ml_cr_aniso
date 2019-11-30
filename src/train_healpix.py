@@ -18,53 +18,46 @@ def get_loss(loss):
         pass
     return loss
 
+source_data = {
+    # Name : [source_lon, source_lat, D_src]
+    'M82': [141.4095,40.5670,'3.5'],
+    'CenA': [309.5159,19.4173,'3.5'],
+    'NGC253': [97.3638,-87.9645,'3.5'],
+    # 'NGC6946': [95.71873,11.6729,'6.0'],
+    'M87': [283.7777,74.4912, '18.5'],
+    'FornaxA': [240.1627,-56.6898,'20.0']
+}
+
 def get_source_data(source_id):
-    if source_id == 'M82':
-        source_lon = 141.4095
-        source_lat = 40.5670
-        D_src = '3.5'  # Mpc
-    elif source_id == 'CenA':
-        source_lon = 309.5159
-        source_lat = 19.4173
-        D_src = '3.5'  # Mpc
-    elif source_id == 'NGC253':
-        source_lon = 97.3638
-        source_lat = -87.9645
-        D_src = '3.5'  # Mpc
-    elif source_id == 'NGC6946':
-        source_lon = 95.71873
-        source_lat = 11.6729
-        D_src = '6.0'
-    elif source_id == 'M87':
-        source_lon = 283.7777
-        source_lat = 74.4912
-        D_src = '18.5'  # Mpc
-    elif source_id == 'FornaxA':
-        source_lon = 240.1627
-        source_lat = -56.6898
-        D_src = '20.0'  # Mpc
+    if source_id in source_data:
+        return tuple(source_data[source_id])
     else:
         raise ValueError('Unknown source!')
-    return source_lon, source_lat, D_src
 
-def load_src_sample(args, suffix = ''):
+
+def load_src_sample(args, suffix='', sources=None):
     import lzma
     import glob
-    _, _, D_src = get_source_data(args.source_id)
 
-    infiles = ('src_sample_' + args.source_id + '_D' + D_src
-              + '_Emin' + str(args.Emin)
-              + '_N' + str(args.Nini)
-              + '_R' + str(args.source_vicinity_radius)
-              + '_Nside' + str(args.Nside) + suffix
-              + '.txt.xz')
-    infiles = args.data_dir + '/' + args.mf + '/sources/' + infiles
-    files = list(glob.glob(infiles))
-    if len(files) == 0:
-        raise ValueError(infiles + ' file(s) not found!')
-    for infile in files:
-        with lzma.open(infile, 'rt') as f:
-            yield np.genfromtxt(f, dtype=float)
+    if sources is None:
+        sources = args.source_id.split(',')
+
+    for source_id in sources:
+        _, _, D_src = get_source_data(source_id)
+
+        infiles = ('src_sample_' + source_id + '_D' + D_src
+                  + '_Emin' + str(args.Emin)
+                  + '_N' + str(args.Nini)
+                  + '_R' + str(args.source_vicinity_radius)
+                  + '_Nside' + str(args.Nside) + suffix
+                  + '.txt.xz')
+        infiles = args.data_dir + '/' + args.mf + '/sources/' + infiles
+        files = list(glob.glob(infiles))
+        if len(files) == 0:
+            raise ValueError(infiles + ' file(s) not found!')
+        for infile in files:
+            with lzma.open(infile, 'rt') as f:
+                yield np.genfromtxt(f, dtype=float)
 
 
 def f_sampler(args, n_samples=-1):  # if < 0, sample forever
@@ -107,10 +100,11 @@ def f_sampler(args, n_samples=-1):  # if < 0, sample forever
         n += 1
 
 class SampleGenerator(keras.utils.Sequence):
-    def __init__(self, args, deterministic=None, seed=0, n_samples=None, return_frac=False, suffix='*'):
+    def __init__(self, args, deterministic=None, seed=0, n_samples=None, return_frac=False, suffix='*', sources=None):
         self.seed = seed
         self.return_frac = return_frac
         self.add_iso = args.f_src_min > 0 or not args.log_sample
+        self.sources = sources
 
         if n_samples is None:
             n_samples = args.n_samples
@@ -130,7 +124,7 @@ class SampleGenerator(keras.utils.Sequence):
 
         self.batch_size = batch_size
 
-        data_list = list(load_src_sample(args, suffix=suffix))
+        data_list = list(load_src_sample(args, suffix=suffix, sources=sources))
         self.Neecr = args.Neecr
         #self.n_batches = n_batches
 
@@ -326,7 +320,8 @@ def main():
     add_arg('--Neecr', type=int, help='Total number of EECRs in each sample', default=500)
     add_arg('--Emin', type=int, help='Emin in EeV for which the input sample was generated', default=56)
     add_arg('--Nmixed_samples', type=int, help='Number of mixed samples (i.e., the sample size)', default=1000)
-    add_arg('--source_id', type=str, help='source (CenA, NGC253, M82, M87 or FornaxA)', default='CenA')
+    add_arg('--source_id', type=str, help='source (CenA, NGC253, M82, M87 or FornaxA) or comma separated list of sources or "all"',
+            default='CenA')
     add_arg('--data_dir', type=str, help='data root directory (should contain jf/sources/ or pt/sources/)',
             default='data')
     add_arg('--mf', type=str, help='Magnetic field model (jf or pt)', default='jf')
@@ -358,6 +353,11 @@ def main():
 
     args = cline_parser.parse_args()
 
+    if args.source_id == 'all':
+        args.source_id = ','.join(sorted(source_data.keys()))
+
+    sources = sorted(args.source_id.split(','))
+
     if not args.show_fig:
         matplotlib.use('Agg')  # enable figure generation without running X server session
 
@@ -365,28 +365,34 @@ def main():
 
     args.loss = get_loss(args.loss)
 
-    train_gen = SampleGenerator(args, seed=0)
-    val_gen = SampleGenerator(args, deterministic=True, seed=2**20, n_samples=max(1000, args.n_samples//10))
-    test_gen = SampleGenerator(args, deterministic=True, seed=2**26, n_samples=max(10000, args.n_samples))
+    val_seed = 2**20
+    test_seed = 2**26
 
-    frac_gen = test_gen
+    train_gen = SampleGenerator(args, seed=0)
+    val_gen = SampleGenerator(args, deterministic=True, seed=val_seed, n_samples=max(1000, args.n_samples//10))
+    test_gen = [SampleGenerator(args, deterministic=True, seed=test_seed, n_samples=max(10000, args.n_samples))]
+    if len(sources) > 1:
+        test_gen += [SampleGenerator(args, deterministic=True, seed=2 ** 26,
+                                     n_samples=max(10000, args.n_samples), sources=[s]) for s in sources]
+
+    frac_gen = test_gen[0]
     frac_mf = args.mf
 
     test_b_gen = None
     if len(args.compare_mf)==0:
         args.compare_mf = 'pt' if args.mf == 'jf' else 'jf'
 
-    compare_mf = args.compare_mf
-
     mf = args.mf
     args.mf = args.compare_mf
     try:
-        test_b_gen = SampleGenerator(args, deterministic=True, seed=2**26, n_samples=max(10000, args.n_samples))
+        test_b_gen = [SampleGenerator(args, deterministic=True, seed=2**26, n_samples=max(10000, args.n_samples))]
+        if len(sources) > 1:
+            test_b_gen += [SampleGenerator(args, deterministic=True, seed=2**26,
+                                         n_samples=max(10000, args.n_samples), sources=[s]) for s in sources]
+
         if args.monitor == 'frac_compare':
-            frac_gen = test_b_gen
-            test_b_gen = test_gen
+            frac_gen = test_b_gen[0]
             frac_mf = args.compare_mf
-            compare_mf = mf
     except ValueError as ver:
         print(args.compare_mf, 'field test will be skipped:', str(ver))
         if args.monitor == 'frac_compare':
@@ -407,37 +413,42 @@ def main():
         frac_log = open(frac_log_file, mode='wt', buffering=1)
         print('#epoch\tfracs\talpha', file=frac_log)
 
-        fracs = []
-        alphas = []
+        frac_and_alphas = []
 
         def frac_logging_callback(epoch, logs):
-            frac, alpha = calc_detectable_frac(frac_gen, model, args)
-            print(epoch, frac, alpha, file=frac_log)
-            print('Detectable fraction:', frac, '\talpha =', alpha)
+            f_a = calc_detectable_frac(frac_gen, model, args)
+            frac_and_alphas.append(f_a)
+            print(epoch, f_a[0], f_a[1], file=frac_log)
+            print('Detectable fraction:', f_a[0], '\talpha =', f_a[1])
             if args.monitor.startswith('frac'):
-                if len(fracs) == 0 or min(fracs) > frac:
+                f_a_sorted = sorted(frac_and_alphas)
+
+                if len(frac_and_alphas) == 1 or f_a == f_a_sorted[0]:
                     model.save_weights(weights_file, overwrite=True)
-                elif len(fracs) - fracs.index(min(fracs)) >= n_early_stop_epochs:
+                elif n_early_stop_epochs > 0 and len(frac_and_alphas) - frac_and_alphas.index(f_a_sorted[0]) > n_early_stop_epochs:
                     model.stop_training = True
                     print('Early stop on epoch', epoch)
-            fracs.append(frac)
-            alphas.append(alpha)
 
-        callbacks = []
-        if n_early_stop_epochs > 0:
-            callbacks = [
-                keras.callbacks.LambdaCallback(on_epoch_end=frac_logging_callback),
-            ]
-            if not args.monitor.startswith('frac'):
+
+        callbacks = [keras.callbacks.LambdaCallback(on_epoch_end=frac_logging_callback)]
+        if not args.monitor.startswith('frac'):
+            callbacks.append(
                 keras.callbacks.ModelCheckpoint(weights_file, save_best_only=True, monitor=args.monitor,
-                                                save_weights_only=True),  # save best model
+                                                save_weights_only=True)  # save best model
+            )
+            if n_early_stop_epochs > 0:
+                callbacks.append(
+                    keras.callbacks.EarlyStopping(monitor=args.monitor, patience=n_early_stop_epochs, verbose=1)
+                    # early stop
+                )
 
-                callbacks += keras.callbacks.EarlyStopping(monitor=args.monitor, patience=n_early_stop_epochs, verbose=1)  # early stop
         t = time.time()
 
+        frac_gen.seed = val_seed  # make sure different samples are used in validation and test phase
         history = model.fit_generator(train_gen, epochs=epochs, verbose=verbose,
                             validation_data=val_gen, callbacks=callbacks)
         t = time.time() - t
+        frac_gen.seed = test_seed  # make sure different samples are used in validation and test phase
         if n_early_stop_epochs > 0 and path.isfile(weights_file):
             model.load_weights(weights_file)  # load best weights
             remove(weights_file)
@@ -447,39 +458,53 @@ def main():
         print('Model saved in', save_path)
 
         plot_learning_curves(history, save_file=save_path[:-3] + '_train.png', show_fig=args.show_fig)
-        score = model.evaluate_generator(test_gen, verbose=0)
-
-        test_frac = test_alpha = None
-        if test_b_gen is not None:
-            print('testing on', compare_mf, 'field')
-            test_frac, test_alpha = calc_detectable_frac(test_b_gen, model, args)
+        score = model.evaluate_generator(test_gen[0], verbose=0)
 
         with open(save_path + '.score', mode='w') as out:
             for name, sc in zip(model.metrics_names, score):
                 print(name, sc, file=out)
                 print(name, sc)
-            f = min(fracs)
-            a = alphas[fracs.index(min(fracs))]
-            for file in [out, stdout]:
-                print('frac_' + frac_mf, f, file=file)
-                print('alpha' + frac_mf, a, file=file)
-                if test_frac is not None:
-                    print('frac_' + compare_mf, test_frac, file=file)
-                    print('alpha_' + compare_mf, test_alpha, file=file)
 
             print('training_time_sec', t, file=out)
 
+            frac_and_alphas.sort()
+            f, a = frac_and_alphas[0]
+            for file in [out, stdout]:
+
+                print('best_val_frac_' + frac_mf, f, file=file)
+                print('best_val_alpha_' + frac_mf, a, file=file)
+
+            for gen in test_gen:
+                sources = gen.sources
+                if sources is None:
+                    src_name = 'average' if ',' in args.source_id else args.source_id
+                else:
+                    src_name = ','.join(sources)
+                print('testing on', src_name,'source')
+                # print(args.mf, 'field..')
+                test_frac, test_alpha = calc_detectable_frac(gen, model, args)
+                for file in [out, stdout]:
+                    print('frac_' + src_name + '_' + args.mf, test_frac, file=file)
+                    print('alpha_' + src_name + '_' + args.mf, test_alpha, file=file)
+                b_gen = [b for b in test_b_gen if b.sources == gen.sources]
+                if len(b_gen) == 1:
+                    # print(args.compare_mf, 'field..')
+                    test_frac, test_alpha = calc_detectable_frac(b_gen[0], model, args)
+                    for file in [out, stdout]:
+                        print('frac_' + src_name + '_' + args.compare_mf, test_frac, file=file)
+                        print('alpha_' + src_name + '_' + args.compare_mf, test_alpha, file=file)
+
+
+
     model = create_model(train_gen.Ncells, nside_min=args.nside_min, n_filters=args.n_filters,
                          inner_layer_sizes=inner_layers, pretrained=args.pretrained)
-
-
-
 
     if args.pretrained and len(args.output_prefix) == 0:
         save_name = args.pretrained[:-3]
     else:
         n_side_min = min(args.Nside, args.nside_min)
-        save_name = args.output_prefix + '{}_N{}_B{}_Ns{}-{}_F{}'.format(args.source_id, args.Neecr, args.mf, args.Nside,
+        prefix = '_'.join(sorted(args.source_id.split(',')))
+        save_name = args.output_prefix + '{}_N{}_B{}_Ns{}-{}_F{}'.format(prefix, args.Neecr, args.mf, args.Nside,
                                                                      n_side_min, args.n_filters)
         if len(inner_layers) > 0:
             save_name += ("_L" + '_'.join([str(i) for i in inner_layers]))
