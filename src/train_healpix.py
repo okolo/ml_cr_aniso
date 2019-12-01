@@ -105,6 +105,7 @@ class SampleGenerator(keras.utils.Sequence):
         self.return_frac = return_frac
         self.add_iso = args.f_src_min > 0 or not args.log_sample
         self.sources = sources
+        self.__args = args
 
         if n_samples is None:
             n_samples = args.n_samples
@@ -129,7 +130,6 @@ class SampleGenerator(keras.utils.Sequence):
         #self.n_batches = n_batches
 
         self.Ncells = hp.nside2npix(args.Nside)
-        self.sampler = f_sampler(args)
 
         # 2. Find non-zero lines, i.e., those with Z>0:
         self.healpix_src_cells = []
@@ -153,6 +153,8 @@ class SampleGenerator(keras.utils.Sequence):
         if self.deterministic:
             np.random.seed(idx + self.seed)
 
+        sampler = f_sampler(self.__args)
+
         healpix_map = np.zeros((self.batch_size, self.Ncells), dtype=float)
         answers = np.zeros(self.batch_size)
         for i in range(self.batch_size):
@@ -160,7 +162,7 @@ class SampleGenerator(keras.utils.Sequence):
                 Nsrc = 0
                 Niso = self.Neecr
             else:
-                Nsrc, Niso = self.sampler.__next__()
+                Nsrc, Niso = sampler.__next__()
 
             if Nsrc > 0:
                 file_idx = 0
