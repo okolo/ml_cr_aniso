@@ -66,6 +66,7 @@ in data/GMF/sources/
 import sys
 import numpy as np
 from PyAstronomy.pyasl import getAngDist
+import argparse
 
 import lzma
 import healpy as hp
@@ -93,57 +94,73 @@ Nside = 256
 # Radius of the source neighborhood, deg
 source_vicinity_radius = 1
 
+shiftA = 1.0
+
 # Model of the Galactic Magnetic Field
-#GMF = 'JF12ST'
-GMF = 'PTKN11'
+#GMF = 'jf'
+GMF = 'pt'
 
 #______________________________________________________________________
 # No settings below
 
-if source_id=='M82':
-    source_lon = 141.4095
-    source_lat = 40.5670
-    D_src = '3.5'    # Mpc
-elif source_id=='CenA':
-    source_lon = 309.5159
-    source_lat = 19.4173
-    D_src = '3.5'    # Mpc
-elif source_id=='NGC253':
-    source_lon = 97.3638
-    source_lat = -87.9645
-    D_src = '3.5'    # Mpc
-elif source_id=='NGC6946':
-    source_lon = 95.71873
-    source_lat = 11.6729
-    D_src = '6.0'
-elif source_id=='M87':
-    source_lon = 283.7777
-    source_lat = 74.4912
-    D_src = '18.5'    # Mpc
-elif source_id=='FornaxA':
-    source_lon = 240.1627
-    source_lat = -56.6898
-    D_src = '20.0'    # Mpc
-else:
-    print('\nUnknown source!')
-    sys.exit()
+source_data = {
+    # Name : [source_lon, source_lat, D_src]
+    'M82': [141.4095,40.5670,'3.5'],
+    'CenA': [309.5159,19.4173,'3.5'],
+    'NGC253': [97.3638,-87.9645,'3.5'],
+    'NGC6946': [95.71873,11.6729,'6.0'],
+    'M87': [283.7777,74.4912, '18.5'],
+    'FornaxA': [240.1627,-56.6898,'20.0']
+}
+
+def get_source_data(source_id):
+    if source_id in source_data:
+        return tuple(source_data[source_id])
+    else:
+        raise ValueError('Unknown source!')
+
+cline_parser = argparse.ArgumentParser(description='E,Z pair sampling',
+                                       formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+def add_arg(*pargs, **kwargs):
+    cline_parser.add_argument(*pargs, **kwargs)
+
+add_arg('--source_id', type=str, help='one of ' + ' , '.join(source_data.keys()), default=source_id)
+add_arg('--GMF', type=str, help='pt or jf', default=GMF)
+add_arg('--Emin', type=float, help='Emin in EeV', default=Emin)
+add_arg('--Nini', type=int, help='Number of cosmic ray nuclei to form a sample', default=Nini)
+add_arg('--Nside', type=int, help='Nside for output healpix grid', default=Nside)
+add_arg('--shiftA', type=float, help='A factor to shift and atomic mass by', default=shiftA)
+
+
+args = cline_parser.parse_args()
+source_id = args.source_id
+GMF = args.GMF
+Emin = args.Emin
+Nini = args.Nini
+Nside = args.Nside
+shiftA = args.shiftA
+
+source_lon, source_lat, D_src = get_source_data(source_id)
 
 #______________________________________________________________________
 # A file in spectra_1s/
 
-if GMF=='PTKN11':
-    gmf_dir = 'pt/'
-else:
-    gmf_dir = 'jf/'
+gmf_dir = GMF + '/'
 
 # File with the spectrum that was "propagated" with CRPropa
 infile = ('data/sample_D'+D_src+'_Emin'+str(Emin)+'_'
-        + str(Nini) + 'nuclei_sorted.txt')
+        + str(Nini))
+if shiftA != 1.0:
+    infile += '_shift' + str(shiftA)
+
+infile += 'nuclei_sorted.txt'
 
 outfile = ('src_sample_' + source_id + '_D' + D_src
         + '_Emin' + str(Emin)
         + '_N' + str(Nini) + '_R'
         + str(source_vicinity_radius) + '_Nside' + str(Nside))
+if shiftA != 1.0:
+    outfile += '_shift' + str(shiftA)
 
 # A template for the output file
 # lat, lon (ini); lat, lon (res); angsep; Z, E, # in the healpix map
