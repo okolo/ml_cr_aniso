@@ -52,3 +52,7 @@ python3 f_spec.py aps_CenA_D3.5_Bjf_Emin56_Neecr50_Nsample100000_R1_Nside512_log
 в функции
 def f(spec):
     ......
+
+Для того, чтобы иметь возможность загружать ранее обученные модели, использующие библиотеку NNhealpix необходимо применить следующий патч:
+    cd (NNhealpix dir)/nnhealpix/layers
+    patch < (uhecr_aniso dir)/src/nnhealpix_layers.patch
