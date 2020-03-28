@@ -36,6 +36,13 @@ def get_source_data(source_id):
 
 
 def load_src_sample(args, suffix='', sources=None):
+    """
+    Load data from src_sample files
+    :param args: command line params (used if sources are given by name or not given at all)
+    :param suffix: may be used to select a ranage of files (e.g. suffix='*') or specific realizations
+    :param sources: optional explicit list of sources or files
+    :return:
+    """
     import lzma
     import glob
 
@@ -43,15 +50,17 @@ def load_src_sample(args, suffix='', sources=None):
         sources = args.source_id.split(',')
 
     for source_id in sources:
-        _, _, D_src = get_source_data(source_id)
-
-        infiles = ('src_sample_' + source_id + '_D' + D_src
-                  + '_Emin' + str(args.Emin)
-                  + '_N' + str(args.Nini)
-                  + '_R' + str(args.source_vicinity_radius)
-                  + '_Nside' + str(args.Nside) + suffix
-                  + '.txt.xz')
-        infiles = args.data_dir + '/' + args.mf + '/sources/' + infiles
+        if 'src_sample_' in source_id:
+            infiles = source_id  # looks like path
+        else:
+            _, _, D_src = get_source_data(source_id)  # looks like source name
+            infiles = ('src_sample_' + source_id + '_D' + D_src
+                      + '_Emin' + str(args.Emin)
+                      + '_N' + str(args.Nini)
+                      + '_R' + str(args.source_vicinity_radius)
+                      + '_Nside' + str(args.Nside) + suffix
+                      + '.txt.xz')
+            infiles = args.data_dir + '/' + args.mf + '/sources/' + infiles
         files = list(glob.glob(infiles))
         if len(files) == 0:
             raise ValueError(infiles + ' file(s) not found!')
@@ -311,7 +320,8 @@ def calc_detectable_frac(gen, model, args):
     return fracs[i], alpha(i)
 
 def main():
-    cline_parser = argparse.ArgumentParser(description='Train network')
+    cline_parser = argparse.ArgumentParser(description='Train network',
+                                       formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 
     def add_arg(*pargs, **kwargs):

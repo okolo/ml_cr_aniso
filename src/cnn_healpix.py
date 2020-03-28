@@ -3,11 +3,16 @@ from nnhealpix.layers import ConvNeighbours, MaxPooling
 import keras
 from keras.layers import Dense, Dropout, BatchNormalization, Reshape, Flatten
 import numpy as np
+import sys
 
 def assert_valid_nside(nside):
     sqnside = np.sqrt(nside)
     if np.round(sqnside) != sqnside:
         raise ValueError('Invalid nside = ' + str(nside))
+
+custom_objects={
+        'OrderMap': nnhealpix.layers.OrderMap
+     }
 
 def create_model(input_dim, nside_min = 32, inner_layer_sizes = [],
                  n_filters=32, pretrained='', l2=0, dropout_rate=0.,
@@ -20,7 +25,16 @@ def create_model(input_dim, nside_min = 32, inner_layer_sizes = [],
     nside = int(np.round(nside))
 
     if pretrained:
-        model = keras.models.load_model(pretrained, compile=False)
+        try:
+            model = keras.models.load_model(pretrained, compile=False, custom_objects=custom_objects)
+        except TypeError as ex:
+            if 'dict' in str(ex):
+                print('Please apply the following patch to NNhealpix/nnhealpix/layers/__init__.py:')
+                print('\tcd ~/git/NNhealpix/nnhealpix/layers')
+                print('\tpatch < ~/git/uhecr_aniso/src/nnhealpix_layers.patch')
+                exit(1)
+            else:
+                raise sys.exc_info()  # pass the exception
     else:
         input = keras.Input((input_dim,))
         x = input

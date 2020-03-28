@@ -1,0 +1,12 @@
+--- __init__.py	2020-03-28 19:29:37.000000000 +0300
++++ new__init__.py	2020-03-28 19:29:29.000000000 +0300
+@@ -20,6 +20,9 @@
+     """
+ 
+     def __init__(self, indices, **kwargs):
++        #### bug fix by ok
++        if type(indices) == dict:
++            indices = np.array(indices['value'], dtype="int32")
+         self.input_indices = np.array(indices, dtype="int32")
+         Kindices = K.variable(indices, dtype="int32")
+         self.indices = Kindices
