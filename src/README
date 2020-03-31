@@ -1,3 +1,51 @@
+####  Генерация карт событий от источкика
+
+1) сэмплинг пар E,Z
+python psample.py --distance 3.5 --Nini 100000 --Emin 56
+условие: в папке ./spectra_1s/ должны находиться файлы XX.X.gz, где XX.X - расстояние до источника, напр 3.5.gz
+результат выполнения sample_D3.5_Emin56_100000nuclei.txt
+1a) то же со сдвигом состава
+   python psample.py --distance 3.5 --Nini 100000 --Emin 56 --shiftA 0.5
+
+2) сортировка вывода
+  cat sample_D3.5_Emin56_100000nuclei.txt | awk 'NR>6' | sort | uniq -c | awk '{print $2 " " $3 " " $1}' > sample_D3.5_Emin56_100000nuclei_sorted.txt
+
+3) генерация карт направлений прихода
+  python src_sample.py --source_id CenA --Nside 32 --Nini 100000 --GMF jf --Emin 56
+  условие 1: сгенерирован файл data/sample_D3.5_Emin56_100000nuclei_sorted.txt  (см. шаг 2, здесь 3.5 - расстояние до CenA)
+  список поддерживаемых источников с расстояниями см. словарь source_data в src_sample.py
+  условие 2: в папке data/jf/32 лежат файлы helium_141EeV.txt.xz и т.п. (результат бэктрекинга ядер), здесь jf - модель магнитного поля
+  результат выполнения: файл data/jf/sources/src_sample_CenA_D3.5_Emin56_N100000_R1_Nside32.txt.xz
+##########################################################
+### тренировка нейронной сети и работа с тестовой статистикой на основе HEALPix-карт направлений прихода
+
+1) тренировка сети и оценка минимальной доли детектируемых событий
+python train_healpix.py --source_id CenA --Neecr 500 --log_sample --n_samples 100000 --mf jf --n_early_stop 2 --Nside 32
+обучение одной сетки на примерах сразу от нескольких источников:
+python train_healpix.py --source_id "CenA,M82,NGC253,M87,FornaxA" ...
+сравнение результатов применения сетки к картам полученным для другого магнитного поля:
+python train_healpix.py --compare_mf pt ...
+условие: в папках data/jf/sources/ , data/pt/sources/ и т.п. должны находиться файлы с картами для соответствующих случаев
+результат выполнения:
+    CenA_N500_Bjf_Ns32-1_F32_v0.h5 - обученная нейронная сеть
+    CenA_N500_Bjf_Ns32-1_F32_v0.h5.score - список основных показателей классификатора и тестовой статистики,
+    в том числе минимальная доля детектируемых событий для модели магнитного поля, на котором сеть тренировалась
+    и альтернативной модели
+    CenA_N500_Bjf_Ns32-1_F32_v0_det_frac.txt - эволюция минимальной детектируемой доли с эпохами обучения нейронной сети
+
+2) применение существующей нейросетевой модели к произвольному распределению направлений прилета, задаваемому картой
+в формате src_sample_
+    python calc_min_fractions.py data/jf/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32_shift2.0.txt.xz --log_sample --Neecr 300 --n_samples 10000 --Nside 32 --model CenA_FornaxA_M82_M87_NGC253_N300_Bjf_Ns32-1_F32_v0.h5
+результат:
+    программа выводит в консоль минимальную долю детектируемых событий вместе с alpha (вероятностью ошибки 1 типа)
+
+Для того, чтобы иметь возможность загружать ранее обученные модели, использующие библиотеку NNhealpix необходимо применить следующий патч:
+    cd (NNhealpix dir)/nnhealpix/layers
+    patch < (uhecr_aniso dir)/src/nnhealpix_layers.patch
+
+##########################################################
+### тестовая статистика на основе углового спектра
+
 1) Генерируем npz-файлы с примерами
 смешенным:
 python3 mixed_spectrum_gen.py --Neecr 50 --Nmixed_samples 100000 --source_id CenA --log_sample --f_src_min 1e-2
@@ -53,6 +101,3 @@ python3 f_spec.py aps_CenA_D3.5_Bjf_Emin56_Neecr50_Nsample100000_R1_Nside512_log
 def f(spec):
     ......
 
-Для того, чтобы иметь возможность загружать ранее обученные модели, использующие библиотеку NNhealpix необходимо применить следующий патч:
-    cd (NNhealpix dir)/nnhealpix/layers
-    patch < (uhecr_aniso dir)/src/nnhealpix_layers.patch
