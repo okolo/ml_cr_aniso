@@ -16,7 +16,7 @@ add_arg('--Nmixed_samples', type=int, help='Number of mixed samples (i.e., the s
 # add_arg('--source_id', type=str,
 #         help='source (CenA, NGC253, M82, M87 or FornaxA) or comma separated list of sources or "all"',
 #         default='CenA')
-add_arg('sources', type=str, nargs='*', metavar='source', default=[])
+add_arg('sources', type=str, nargs='+', metavar='source', default=[])
 add_arg('--Nside', type=int, help='healpix grid Nside parameter', default=32)
 add_arg('--Nini', type=int, help='Size of the initial sample of from-source events', default=10000)
 add_arg('--source_vicinity_radius', type=str, help='source vicinity radius', default='1')
