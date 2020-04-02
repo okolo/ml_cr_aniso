@@ -331,7 +331,7 @@ def main():
     add_arg('--f_src', type=float, help='fraction of "from-source" EECRs [0,1] or -1 for random', default=-1)
     add_arg('--Neecr', type=int, help='Total number of EECRs in each sample', default=500)
     add_arg('--Emin', type=int, help='Emin in EeV for which the input sample was generated', default=56)
-    add_arg('--Nmixed_samples', type=int, help='Number of mixed samples (i.e., the sample size)', default=1000)
+    # add_arg('--Nmixed_samples', type=int, help='Number of mixed samples (i.e., the sample size)', default=1000)
     add_arg('--source_id', type=str, help='source (CenA, NGC253, M82, M87 or FornaxA) or comma separated list of sources or "all"',
             default='CenA')
     add_arg('--data_dir', type=str, help='data root directory (should contain jf/sources/ or pt/sources/)',
@@ -471,6 +471,13 @@ def main():
 
         plot_learning_curves(history, save_file=save_path[:-3] + '_train.png', show_fig=args.show_fig)
         score = model.evaluate_generator(test_gen[0], verbose=0)
+
+        with open(save_path + '.args', mode='w') as args_out:
+            from sys import argv
+            print(*argv, file=args_out)
+            print(file=args_out)
+            for key, val in args.__dict__.items():
+                print(key, '=', val, file=args_out)
 
         with open(save_path + '.score', mode='w') as out:
             for name, sc in zip(model.metrics_names, score):
