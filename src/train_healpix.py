@@ -361,6 +361,7 @@ def main():
     add_arg('--deterministic', action='store_true', help="use deterministic batches for training (default is random)")
     add_arg('--alpha', type=float, help='type 1 maximal error', default=0.01)
     add_arg('--beta', type=float, help='type 2 maximal error', default=0.05)
+    add_arg('--min_version', type=int, help='minimal version number for output naming', default=0)
 
 
     args = cline_parser.parse_args()
@@ -413,7 +414,7 @@ def main():
     args.mf = mf
 
     def train_model(model, save_name, epochs=400, verbose=1, n_early_stop_epochs=30, batch_size=1024):
-        for i in range(100000):
+        for i in range(args.min_version, 100000):
             save_path = save_name + "_v" + str(i) + '.h5'
             if not path.isfile(save_path):
                 with open(save_path, mode='x') as f:
