@@ -34,10 +34,27 @@ add_arg('--data_dir', type=str, help='data root directory (should contain jf/sou
             default='data')
 add_arg('--threshold', type=float,
             help='source fraction threshold for binary classification', default=0.0)
+add_arg('--seed', type=int, help='sample generator seed', default=train_healpix.test_seed)
 
 args = cline_parser.parse_args()
 
-gen = train_healpix.SampleGenerator(args, deterministic=True, sources=args.sources, suffix=args.suffix)
+out_file = args.model + "_cmp.txt"
+with open(out_file, "a") as d:
+    d.write("Model to compare with:\n")
+    d.write(str(args.sources[0]) + "\n")
+    d.write("Neecr={:3d}\n".format(args.Neecr))
+    d.write("Nmixed_samples={:5d}\n".format(args.n_samples))
+
+gen = train_healpix.SampleGenerator(
+    args, deterministic=True, sources=args.sources, suffix=args.suffix, seed=args.seed
+)
 model = train_healpix.create_model(gen.Ncells, pretrained=args.model)
 frac, alpha = train_healpix.calc_detectable_frac(gen, model, args)
 print(frac, alpha)
+
+with open(out_file, "a") as d:
+    d.write("frac={:7.2f}\n".format(frac*100))
+    d.write("alpha={:6.4f}\n".format(alpha))
+    d.write("------------------------------\n")
+
+

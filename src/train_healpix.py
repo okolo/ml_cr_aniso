@@ -9,6 +9,10 @@ import healpy as hp
 from sys import stderr, stdout
 from cnn_healpix import create_model
 
+train_seed = 0
+val_seed = 2 ** 20
+test_seed = 2 ** 26
+
 def get_loss(loss):
     # try to find loss by name in losses module
     # if not found use string as is
@@ -378,10 +382,7 @@ def main():
 
     args.loss = get_loss(args.loss)
 
-    val_seed = 2**20
-    test_seed = 2**26
-
-    train_gen = SampleGenerator(args, seed=0)
+    train_gen = SampleGenerator(args, seed=train_seed)
     val_gen = SampleGenerator(args, deterministic=True, seed=val_seed, n_samples=max(1000, args.n_samples//10))
     test_gen = [SampleGenerator(args, deterministic=True, seed=test_seed, n_samples=max(10000, args.n_samples))]
     if len(sources) > 1:
