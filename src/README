@@ -4,8 +4,10 @@
 python psample.py --distance 3.5 --Nini 100000 --Emin 56
 условие: в папке ./spectra_1s/ должны находиться файлы XX.X.gz, где XX.X - расстояние до источника, напр 3.5.gz
 результат выполнения sample_D3.5_Emin56_100000nuclei.txt
-1a) то же со сдвигом состава
+1a) то же со сдвигом состава A -> A/2
    python psample.py --distance 3.5 --Nini 100000 --Emin 56 --shiftA 0.5
+1b) то же с моно-составом A=16
+   python psample.py --distance 3.5 --Nini 100000 --Emin 56 --shiftA -16
 
 2) сортировка вывода
   cat sample_D3.5_Emin56_100000nuclei.txt | awk 'NR>6' | sort | uniq -c | awk '{print $2 " " $3 " " $1}' > sample_D3.5_Emin56_100000nuclei_sorted.txt

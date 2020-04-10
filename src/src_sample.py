@@ -85,7 +85,7 @@ source_id = 'CenA'
 Nini = 10000
 
 # Minimum energy used to create a sample, EeV:
-Emin = 56
+Emin = '56'
 
 # Healpix grid used in simulations:
 #Nside = 512
@@ -94,7 +94,7 @@ Nside = 256
 # Radius of the source neighborhood, deg
 source_vicinity_radius = 1
 
-shiftA = 1.0
+shiftA = '1'
 
 # Model of the Galactic Magnetic Field
 #GMF = 'jf'
@@ -126,10 +126,10 @@ def add_arg(*pargs, **kwargs):
 
 add_arg('--source_id', type=str, help='one of ' + ' , '.join(source_data.keys()), default=source_id)
 add_arg('--GMF', type=str, help='pt or jf', default=GMF)
-add_arg('--Emin', type=float, help='Emin in EeV', default=Emin)
+add_arg('--Emin', type=str, help='Emin in EeV', default=Emin)
 add_arg('--Nini', type=int, help='Number of cosmic ray nuclei to form a sample', default=Nini)
 add_arg('--Nside', type=int, help='Nside for output healpix grid', default=Nside)
-add_arg('--shiftA', type=float, help='A factor to shift and atomic mass by', default=shiftA)
+add_arg('--shiftA', type=str, help='A factor to shift and atomic mass by', default=shiftA)
 
 
 args = cline_parser.parse_args()
@@ -138,7 +138,7 @@ GMF = args.GMF
 Emin = args.Emin
 Nini = args.Nini
 Nside = args.Nside
-shiftA = args.shiftA
+shiftA = float(args.shiftA)
 
 source_lon, source_lat, D_src = get_source_data(source_id)
 
@@ -148,19 +148,19 @@ source_lon, source_lat, D_src = get_source_data(source_id)
 gmf_dir = GMF + '/'
 
 # File with the spectrum that was "propagated" with CRPropa
-infile = ('data/sample_D'+D_src+'_Emin'+str(Emin)+'_'
+infile = ('data/sample_D'+D_src+'_Emin'+Emin+'_'
         + str(Nini))
 if shiftA != 1.0:
-    infile += '_shift' + str(shiftA)
+    infile += '_shift' + args.shiftA
 
 infile += 'nuclei_sorted.txt'
 
 outfile = ('src_sample_' + source_id + '_D' + D_src
-        + '_Emin' + str(Emin)
+        + '_Emin' + Emin
         + '_N' + str(Nini) + '_R'
         + str(source_vicinity_radius) + '_Nside' + str(Nside))
 if shiftA != 1.0:
-    outfile += '_shift' + str(shiftA)
+    outfile += '_shift' + args.shiftA
 
 # A template for the output file
 # lat, lon (ini); lat, lon (res); angsep; Z, E, # in the healpix map
