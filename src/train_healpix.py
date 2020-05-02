@@ -113,7 +113,8 @@ def f_sampler(args, n_samples=-1):  # if < 0, sample forever
         n += 1
 
 class SampleGenerator(keras.utils.Sequence):
-    def __init__(self, args, deterministic=None, seed=0, n_samples=None, return_frac=False, suffix='*', sources=None):
+    def __init__(self, args, deterministic=None, seed=0, n_samples=None, return_frac=False, suffix='*', sources=None,
+                 mixture=[]):
         self.seed = seed
         self.return_frac = return_frac
         self.add_iso = args.f_src_min > 0 or not args.log_sample
@@ -139,6 +140,11 @@ class SampleGenerator(keras.utils.Sequence):
         self.batch_size = batch_size
 
         data_list = list(load_src_sample(args, suffix=suffix, sources=sources))
+        if len(mixture)>0:
+            assert len(mixture) == len(data_list), 'inconsistent mixture fractions'
+            self.source_part = np.array(mixture)/np.sum(mixture)
+        else:
+            self.source_part = None
         self.Neecr = args.Neecr
         #self.n_batches = n_batches
 
@@ -178,27 +184,34 @@ class SampleGenerator(keras.utils.Sequence):
                 Nsrc, Niso = sampler.__next__()
 
             if Nsrc > 0:
-                file_idx = 0
-                if len(self.nonz_number) > 1:
-                    file_idx = np.random.randint(0, len(self.nonz_number))
-                nonz_number = self.nonz_number[file_idx]
-                healpix_src_cells = self.healpix_src_cells[file_idx]
+                if self.source_part is not None:  # mixture of events from different sources in one sample
+                    sampled_src = np.random.choice(len(self.source_part ), Nsrc, p=self.source_part)
+                    counts = zip(*np.unique(sampled_src, return_counts=True))
+                else:  # samples, containing events from single source
+                    f_idx = 0
+                    if len(self.nonz_number) > 1:
+                        f_idx = np.random.randint(0, len(self.nonz_number))  # select random file
+                    counts = [(f_idx, Nsrc)]
+                for file_idx, n_src in counts:
 
-                # Create a random sample of from-source events:
-                src_sample = np.random.choice(nonz_number, Nsrc, replace=False)
+                    nonz_number = self.nonz_number[file_idx]
+                    healpix_src_cells = self.healpix_src_cells[file_idx]
 
-                # Cells of the healpix grid "occupied" by the from-source sample
-                src_cells = healpix_src_cells[src_sample]
+                    # Create a random sample of from-source events:
+                    src_sample = np.random.choice(nonz_number, n_src, replace=False)
 
-                # This is a simple way to define the map. It assumes
-                # only one EECR gets in a cell. Works OK for Nside=512.
-                # healpix_map[src_cells] = 1
+                    # Cells of the healpix grid "occupied" by the from-source sample
+                    src_cells = healpix_src_cells[src_sample]
 
-                # "cells" is an intermediate variable to simplify the code.
-                # It consists of two arrays: [0] is a list of unique cells,
-                # [1] is their multiplicity.
-                cells = np.unique(src_cells, return_counts=True)
-                healpix_map[i, cells[0]] += cells[1]
+                    # This is a simple way to define the map. It assumes
+                    # only one EECR gets in a cell. Works OK for Nside=512.
+                    # healpix_map[src_cells] = 1
+
+                    # "cells" is an intermediate variable to simplify the code.
+                    # It consists of two arrays: [0] is a list of unique cells,
+                    # [1] is their multiplicity.
+                    cells = np.unique(src_cells, return_counts=True)
+                    healpix_map[i, cells[0]] += cells[1]
 
             if Niso > 0:
                 # A sample of events from the isotropic background

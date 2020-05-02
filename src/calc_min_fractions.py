@@ -17,6 +17,7 @@ add_arg('--Nmixed_samples', type=int, help='Number of mixed samples (i.e., the s
 #         help='source (CenA, NGC253, M82, M87 or FornaxA) or comma separated list of sources or "all"',
 #         default='CenA')
 add_arg('sources', type=str, nargs='+', metavar='source', default=[])
+add_arg('--fractions', type=float, nargs='+', metavar='frac', help='fractions for mixed source case (in the same order as sources)', default=[])
 add_arg('--Nside', type=int, help='healpix grid Nside parameter', default=32)
 add_arg('--Nini', type=int, help='Size of the initial sample of from-source events', default=10000)
 add_arg('--source_vicinity_radius', type=str, help='source vicinity radius', default='1')
@@ -38,6 +39,9 @@ add_arg('--seed', type=int, help='sample generator seed', default=train_healpix.
 
 args = cline_parser.parse_args()
 
+if len(args.fractions) > 0:
+    assert len(args.fractions) == len(args.sources) and len(args.sources) > 1
+
 out_file = args.model + "_cmp.txt"
 with open(out_file, "a") as d:
     d.write("Model to compare with:\n")
@@ -46,7 +50,7 @@ with open(out_file, "a") as d:
     d.write("Nmixed_samples={:5d}\n".format(args.n_samples))
 
 gen = train_healpix.SampleGenerator(
-    args, deterministic=True, sources=args.sources, suffix=args.suffix, seed=args.seed
+    args, deterministic=True, sources=args.sources, suffix=args.suffix, seed=args.seed, mixture=args.fractions
 )
 model = train_healpix.create_model(gen.Ncells, pretrained=args.model)
 frac, alpha = train_healpix.calc_detectable_frac(gen, model, args)
