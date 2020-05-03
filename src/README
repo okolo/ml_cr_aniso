@@ -88,7 +88,7 @@ spectrum_L33_th0.01_v0__aps_CenA_D3.5_Bjf_Emin56_Neecr50_Nsample100000_R1_Nside5
 spectrum_L33_th0.01_v0__iso_Neecr50_Nsample100000_Nside512_1.npz
 
 6) вычисляем детектируемые доли событий
-python3 calc_fractions.py --mixed
+python3 calc_fractions_ps.py --mixed
 spectrum_L33_th0.01_v0__aps_CenA_D3.5_Bjf_Emin56_Neecr50_Nsample100000_R1_Nside512_logF_src_f_min0.01_1.npz --iso spectrum_L33_th0.01_v0__iso_Neecr50_Nsample100000_Nside512_1.npz
 
 результат выполнения:

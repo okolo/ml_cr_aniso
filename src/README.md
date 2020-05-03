@@ -106,3 +106,77 @@ Program outputs minimal detectable from-source event fraction on particular map(
 The information is appended to log file
 CenA_FornaxA_M82_M87_NGC253_N300_Bjf_Ns32-1_F32_v0.h5_cmp.txt
 
+## Angular power spectrum based test statistic
+
+### 1. Generate sample data files
+
+Two groups of sample data files should be generated - training and testing. Each group should contain at least one with
+mixed sample spectra and at least one with isotropic data
+
+#### mixed sample datafile generation:
+
+    python3 mixed_spectrum_gen.py --Neecr 50 --Nmixed_samples 100000 --source_id CenA --log_sample --f_src_min 1e-2
+
+Output is saved to aps_CenA_D3.5_Bjf_Emin56_Neecr50_Nsample100000_R1_Nside512_logF_src_f_min0.01_0.npz
+Consequent multiple executions of the above command in the same folder will produce files xxx_1.npz, xxx_2.npz,
+etc. with unique samples which is ensured by random seed initialization 
+
+#### isotropic coefficients generation:
+
+    python3 mixed_spectrum_gen.py --Neecr 50 --Nmixed_samples 100000 --source_id CenA --f_src 0
+
+Output is saved to iso_Neecr50_Nsample100000_Nside512_0.npz, iso_Neecr50_Nsample100000_Nside512_1.npz, etc.
+
+#### select file used for normalization
+
+This could be any file created on step 1. Edit train_spec.py to set _norm_file_ parameter
+
+    norm_file = 'aps_CenA_D3.5_Emin56_Neecr500_Nsample3000_R1_Nside512_100.npz'
+
+### 2. Train classifier
+
+    python3 train_spec.py aps_CenA_D3.5_Bjf_Emin56_Neecr50_Nsample100000_R1_Nside512_logF_src_f_min0.01_0.npz iso_Neecr50_Nsample100000_Nside512_0.npz
+
+Here use files created in previous step as parameters.
+#### Output
+spectrum_L33_th0.01_v0.h5 trained classifier
+
+### 3. Calculate test statistic on test data
+#### Prerequisites:
+* Two or more files generated in step 1 which belong to the testing group
+
+#### Command:
+
+    python3 nn_f_spec.py aps_CenA_D3.5_Bjf_Emin56_Neecr50_Nsample100000_R1_Nside512_logF_src_f_min0.01_1.npz iso_Neecr50_Nsample100000_Nside512_1.npz --model spectrum_L33_th0.01_v0.h5
+
+#### Output
+Files containing test statistics defined by the classifier, calculated on the samples provided
+spectrum_L33_th0.01_v0__aps_CenA_D3.5_Bjf_Emin56_Neecr50_Nsample100000_R1_Nside512_logF_src_f_min0.01_1.npz
+spectrum_L33_th0.01_v0__iso_Neecr50_Nsample100000_Nside512_1.npz
+
+### 4. Calculate minimal detectable fractions 
+
+#### Prerequisites:
+* Files containing test statistics calculated in step 3
+
+#### Command
+
+    python3 calc_fractions_ps.py --mixed
+spectrum_L33_th0.01_v0__aps_CenA_D3.5_Bjf_Emin56_Neecr50_Nsample100000_R1_Nside512_logF_src_f_min0.01_1.npz --iso spectrum_L33_th0.01_v0__iso_Neecr50_Nsample100000_Nside512_1.npz
+
+The command output to the console:
+detectable_fraction, alpha (type I error probability)
+
+### 5 Arbitrary test statistic evaluation
+
+One could use arbitrary test statistics instead of neural network based classifier. To do this edit _f_spec.py_
+to define your custom statistic 
+
+    def f(spec):
+        ts = ..# define your statistic here
+        return ts
+
+and replace step 3 by the following command
+
+    python3 f_spec.py aps_CenA_D3.5_Bjf_Emin56_Neecr50_Nsample100000_R1_Nside512_logF_src_f_min0.01_1.npz iso_Neecr50_Nsample100000_Nside512_1.npz
+
