@@ -44,10 +44,12 @@ if len(args.fractions) > 0:
 
 out_file = args.model + "_cmp.txt"
 with open(out_file, "a") as d:
-    d.write("Model to compare with:\n")
-    d.write(str(args.sources[0]) + "\n")
-    d.write("Neecr={:3d}\n".format(args.Neecr))
-    d.write("Nmixed_samples={:5d}\n".format(args.n_samples))
+    print("Model to compare with:", file=d)
+    print(*args.sources, file=d)
+    if len(args.fractions) > 0:
+        print('fractions:', *args.fractions, file=d)
+    print("Neecr={:3d}".format(args.Neecr), file=d)
+    print("Nmixed_samples={:5d}".format(args.n_samples), file=d)
 
 gen = train_healpix.SampleGenerator(
     args, deterministic=True, sources=args.sources, suffix=args.suffix, seed=args.seed, mixture=args.fractions
