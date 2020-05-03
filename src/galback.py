@@ -17,22 +17,44 @@ import numpy as np
 # All other parameters are set below. Fix them as needed.
 # The main parameter in healpy_points.py that defines how "precise" is
 # the grid.
-Nside = 256
+Nside = 128
 
 # Maximum step in tracking a nucleus, parsec
 max_step = 25
 tolerance = 1e-4
 
 # Model of the Galactic Magnetic Field
+# ------------------------------------
+# Terral, Ferriere 2017 - Constraints from Faraday rotation on the magnetic
+# field structure in the galactic halo, DOI: 10.1051/0004-6361/201629572,
+# arXiv:1611.10222
+GMF = "TF17"
+
 # Pshirkov, Tinyakov, Kronberg, Newton-McGee, ApJ 2011:
 # NB: check ASS, BSS, Halo below in the code!
-GMF = "PTKN11"
+#GMF = "PTKN11"
+
 # Jasson, Farrar, 2012:
 #GMF = "JF12"
 # In case of striated and/or turbulent components:
 #striated = 1
 #turbulent = 1
-random_seed = 2**27     # only relevant for the JF model
+
+# JF + solenoidal improvements: https://arxiv.org/abs/1809.07528
+# Here I assume striated = turbulent = 1.  The model has two more
+# parameters, I keep the default values:
+# JF12FieldSolenoidal (double delta=3 *kpc, double zs=0.5 *kpc)
+#GMF = "JF12sol"
+# Two parameters of the model, kpc. 3 and 0.5 are the defaults
+#delta_sol = 3
+#zs_sol = 0.5
+
+# Jasson, Farrar, 2012, modified by the Planck Collab., 2016
+# Striated and turbulent components are on.
+#GMF = "JF12Planck"
+
+# This is the seed used in March 2020 to calculate Nside=32, 64.
+random_seed = 2**23     # only relevant for the JF modelss with ST
 
 # Radius of the Milky Way, kpc
 Galaxy_radius = 20
@@ -107,8 +129,15 @@ PID = -nucleusId(A,Z)
 # _____________________________________________________________________
 # No initial settings below, only code
 # Set the magnetic field
+seed_text = ''
+add2header = ''
 if GMF == "JF12":
     B = JF12Field()
+
+    # Basename of an output file
+    output_file = ('data/jf0/' + str(Nside) + '/' + nucleus
+            + '_{:03d}'.format(E) + 'EeV.txt')
+
     if striated:
         seed_text = ', random seed=' + str(random_seed)
         B.randomStriated(random_seed)
@@ -118,25 +147,63 @@ if GMF == "JF12":
         B.randomTurbulent(random_seed)
         GMF = GMF + 'T'
 
+elif GMF == "JF12sol":
+    B = JF12FieldSolenoidal(delta = delta_sol * kpc, zs = zs_sol * kpc)
+
     # Basename of an output file
-    output_file = ('data/jf/' + str(Nside) + '/' +nucleus
-            + '_{:03d}'.format(E)
-            + 'EeV.txt')
+    output_file = ('data/jf_sol/' + str(Nside) + '/' + nucleus
+            + '_{:03d}'.format(E) + 'EeV.txt')
+
+    B.randomStriated(random_seed)
+    B.randomTurbulent(random_seed)
+    seed_text = ', random seed=' + str(random_seed)
+    add2header = (' delta=' + str(delta_sol) + ', zs=' + str(zs_sol)
+            + ' kpc\n')
+
+elif GMF == "JF12Planck":
+    B = JF12FieldPlanck()
+
+    # Basename of an output file
+    output_file = ('data/jf_pl/' + str(Nside) + '/' + nucleus
+            + '_{:03d}'.format(E) + 'EeV.txt')
+
+    B.randomStriated(random_seed)
+    B.randomTurbulent(random_seed)
+    seed_text = ', random seed=' + str(random_seed)
 
 elif GMF=='PTKN11':
     B = PT11Field()
     #B.setUseASS(True)
     B.setUseBSS(True)
     B.setUseHalo(True)
-    seed_text = ''
 
     # Basename of an output file
     output_file = ('data/pt/' + str(Nside) + '/' +nucleus
             + '_{:03d}'.format(E)
             + 'EeV.txt')
+
+elif GMF == "TF17":
+    B = TF17Field()
+
+    # Basename of an output file
+    output_file = ('data/tf/' + str(Nside) + '/' +nucleus
+            + '_{:03d}'.format(E)
+            + 'EeV.txt')
+
 else:
     print('Wrong GMF!')
     sys.exit()
+
+# The JF12 model could be modified above by including striated and
+# turbulent components thus we have to fix the path. This could be done
+# above but let us do this here since it does not really matter.
+# In principle, it would make more sense to differentiate regular
+# JF components and random ones
+if GMF == "JF12ST":
+    # Basename of an output file
+    output_file = ('data/jf/' + str(Nside) + '/' +nucleus
+            + '_{:03d}'.format(E)
+            + 'EeV.txt')
 
 # Name of a 2-column ASCII file with colatitude and longitude
 # of the observed particle
@@ -149,8 +216,14 @@ output_header = (' PID = ' + str(PID) + ' (' + nucleus
         + str(Galaxy_radius) + ' kpc. Nside = ' + str(Nside) + '\n'
         + ' Max propagation step = ' + str(max_step) + ' parsec,'
         + ' tolerance = ' + str(tolerance) + '\n'
+        + add2header
         + '   lat_ini     lon_ini     lat_res    lon_res   deflection'
         + '\n')
+
+# Check if the needed file exists already
+if os.path.isfile(output_file+'.xz'):
+    print('Nothing to be done: the needed (Z,E) pair already exists')
+    sys.exit()
 
 # Write input data to a text file for we could check them immediately
 # The file will be overwritten with output data
@@ -263,3 +336,4 @@ np.savetxt(output_file,backtracking_results,fmt='%11.5f',
 os.system('xz '+output_file)
 
 # EOF
+
