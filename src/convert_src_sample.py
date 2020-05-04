@@ -74,6 +74,7 @@ gmf_dir = args.mf
 Nini = args.Nini
 shiftA = float(args.shiftA)
 source_id = args.source
+Nside = args.Nside
 
 #______________________________________________________________________
 
