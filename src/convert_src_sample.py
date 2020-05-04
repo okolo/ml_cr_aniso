@@ -11,6 +11,7 @@ import os
 import numpy as np
 import healpy as hp
 import lzma
+import argparse
 
 #______________________________________________________________________
 
@@ -32,16 +33,47 @@ Emin = 56   # EeV
 Nside = 128
 
 # Radius of the vicinity of a source used when making a sample
-source_vicinity_radius = 1
+source_vicinity_radius = '1'
 
-# Model of the Galactic Magnetic Field
-#GMF = 'JF12ST'
-GMF = 'PTKN11'
+# data folder for selected galactic magnetic field model
+gmf_dir = 'jf'
 
 # Size of the initial sample of from-source events. It is used
 # in the initial file name and when making a sample of src_frac*N_EECR
 # IT SHOULD NOT BE MODIFIED UNLESS A NEW INPUT FILE IS CREATED
 Nini = 10000
+
+# Mass composition shift used for map generation
+shiftA = '0'
+
+#_________________________  parsing command line
+
+cline_parser = argparse.ArgumentParser(description='src_sample_XXX.txt.xz to another (lower) Nside ',
+                                       formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+def add_arg(*pargs, **kwargs):
+    cline_parser.add_argument(*pargs, **kwargs)
+
+
+add_arg('--Nside_ini', type=int, help='Source Nside value', default=Nside_ini)
+add_arg('--Nside', type=int, help='Target Nside value', default=Nside)
+add_arg('--Emin', type=int, help='Emin in EeV for which the input sample was generated', default=Emin)
+add_arg('--source_vicinity_radius', type=str, help='Radius of the vicinity of a source used when making a sample',
+        default=source_vicinity_radius)
+add_arg('--mf', type=str, help='data folder for selected galactic magnetic field model (pt, jf, etc.)',
+        default=gmf_dir)
+add_arg('--Nini', type=int, help='Size of the initial sample of from-source events.', default=Nini)
+add_arg('--shiftA', type=str, help='A factor to shift and atomic mass by', default=shiftA)
+add_arg('--source', type=str, help='Source name', default=source_id)
+
+args = cline_parser.parse_args()
+Nside_ini = args.Nside_ini
+Emin = args.Emin
+source_vicinity_radius = args.source_vicinity_radius
+gmf_dir = args.mf
+Nini = args.Nini
+shiftA = float(args.shiftA)
+source_id = args.source
 
 #______________________________________________________________________
 
@@ -80,10 +112,8 @@ else:
 
 #______________________________________________________________________
 
-if GMF=='PTKN11':
-    gmf_dir = 'pt/'
-else:
-    gmf_dir = 'jf/'
+if not gmf_dir.endswith('/'):
+    gmf_dir += '/'
 
 dir_prefix = 'data/'+gmf_dir+'sources/'
 
@@ -93,15 +123,24 @@ infile = ('src_sample_' + source_id + '_D' + D_src
         + '_Emin' + str(Emin)
         + '_N' + str(Nini)
         + '_R' + str(source_vicinity_radius) 
-        + '_Nside' + str(Nside_ini) + '.txt.xz')
+        + '_Nside' + str(Nside_ini))
+
+if shiftA != 1.0:
+    infile += '_shift' + args.shiftA
+
+infile += '.txt.xz'
 
 # File for individual spectra
 outfile = ('src_sample_' + source_id + '_D' + D_src
         + '_Emin' + str(Emin)
         + '_N' + str(Nini)
         + '_R' + str(source_vicinity_radius) 
-        + '_Nside' + str(Nside) + '.txt')
+        + '_Nside' + str(Nside))
 
+if shiftA != 1.0:
+    outfile += '_shift' + args.shiftA
+
+outfile += '.txt'
 
 #______________________________________________________________________
 
