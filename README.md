@@ -6,7 +6,8 @@ Please cite the following <a href="https://arxiv.org/abs/1912.00625">paper</a>
 
 ### 1. Unpack KKOS spectra files
 
-<pre><code>tar xfoj spectra_1s.tbz2 </code></pre>
+    cd src
+    tar xfoj data/spectra_1s.tbz2
 
 ### 2. Sample E,Z pairs
 
@@ -24,7 +25,7 @@ Please cite the following <a href="https://arxiv.org/abs/1912.00625">paper</a>
 
 2. sorting output
 
-  <pre><code>cat sample_D3.5_Emin56_100000nuclei.txt | awk 'NR>6' | sort | uniq -c | awk '{print $2 " " $3 " " $1}' > data/sample_D3.5_Emin56_100000nuclei_sorted.txt</code></pre>
+<pre><code>cat sample_D3.5_Emin56_100000nuclei.txt | awk 'NR>6' | sort | uniq -c | awk '{print $2 " " $3 " " $1}' > data/sample_D3.5_Emin56_100000nuclei_sorted.txt</code></pre>
 
 ### 3. Deflection map preparation
 
