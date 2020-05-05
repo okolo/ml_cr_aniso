@@ -2,7 +2,7 @@
 by Oleg Kalashev, Maxim Pshirkov, Mikhail Zotov
 
 Please cite the following <a href="https://arxiv.org/abs/1912.00625">paper</a>
-## source code and suplmental materials
+## source code and supplemental materials
 
 ### 1. Unpack KKOS spectra files
 
@@ -36,7 +36,7 @@ To calculate deflection map for pair _E, Z_ run command
 
 <pre><code>python galback.py Z E</code></pre>
 
-You can edit healpix grid resolution parameter Nside and galactic magnetic fiels model in galback.py
+You can edit healpix grid resolution parameter Nside and galactic magnetic fields model in galback.py
 For list of available galactic magnetic field models scroll to line
 <pre><code># Model of the Galactic Magnetic Field</code></pre>
 in _galback.py_
@@ -55,6 +55,11 @@ in _galback.py_
 file with arrival directions density map
 _data/jf/sources/src_sample_CenA_D3.5_Emin56_N100000_R1_Nside32.txt.xz_
 
+#### Map converter tool
+We advice to generate maps for higher _Nside_ i.e. _Nside=512_ and convert them to lower _Nside_ if needed.
+This can be done with the following command
+
+    python convert_src_sample.py --source CenA --Nside_ini 512 --Nini 100000 --mf jf --Nside 32
   
 ### 5. Train classifier on HEALPix grid and estimate minimal from-source event fraction
 
@@ -96,7 +101,7 @@ patch < (uhecr_aniso dir)/src/nnhealpix_layers.patch
     python calc_min_fractions.py data/jf/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32_shift2.0.txt.xz --log_sample --Neecr 300 --n_samples 10000 --Nside 32 --model CenA_FornaxA_M82_M87_NGC253_N300_Bjf_Ns32-1_F32_v0.h5
 
 In case several _src_sample_ files are given, maps are generated using each of them
-in roughly equal ammounts (only one random map is used for each sample generation)
+in roughly equal amounts (only one random map is used for each sample generation)
 
 With flag _--fractions_ several maps in given proportions can be used for each sample generation, e.g.:
 
