@@ -1,0 +1,160 @@
+Model to compare with:
+data/jf/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz data/jf/sources/src_sample_FornaxA_D20.0_Emin56_N10000_R1_Nside32.txt.xz
+fractions: 3.0 1.0
+Neecr=200
+Nmixed_samples=50000
+frac=   7.00
+alpha=0.0097
+------------------------------
+Model to compare with:
+data/jf_pl/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz data/jf_pl/sources/src_sample_FornaxA_D20.0_Emin56_N10000_R1_Nside32.txt.xz
+fractions: 3.0 1.0
+Neecr=200
+Nmixed_samples=50000
+frac=   8.50
+alpha=0.0100
+------------------------------
+Model to compare with:
+data/jf_sol/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz data/jf_sol/sources/src_sample_FornaxA_D20.0_Emin56_N10000_R1_Nside32.txt.xz
+fractions: 3.0 1.0
+Neecr=200
+Nmixed_samples=50000
+frac=   7.50
+alpha=0.0077
+------------------------------
+Model to compare with:
+data/tf/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz data/tf/sources/src_sample_FornaxA_D20.0_Emin56_N10000_R1_Nside32.txt.xz
+fractions: 3.0 1.0
+Neecr=200
+Nmixed_samples=50000
+frac=  15.00
+alpha=0.0093
+------------------------------
+Model to compare with:
+data/pt/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz data/pt/sources/src_sample_FornaxA_D20.0_Emin56_N10000_R1_Nside32.txt.xz
+fractions: 3.0 1.0
+Neecr=200
+Nmixed_samples=50000
+frac=   7.50
+alpha=0.0069
+------------------------------
+Model to compare with:
+data/jf/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz data/jf/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32.txt.xz
+fractions: 3.0 1.0
+Neecr=200
+Nmixed_samples=50000
+frac=   8.50
+alpha=0.0097
+------------------------------
+Model to compare with:
+data/jf_pl/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz data/jf_pl/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32.txt.xz
+fractions: 3.0 1.0
+Neecr=200
+Nmixed_samples=50000
+frac=  10.00
+alpha=0.0087
+------------------------------
+Model to compare with:
+data/jf_sol/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz data/jf_sol/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32.txt.xz
+fractions: 3.0 1.0
+Neecr=200
+Nmixed_samples=50000
+frac=   9.00
+alpha=0.0076
+------------------------------
+Model to compare with:
+data/tf/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz data/tf/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32.txt.xz
+fractions: 3.0 1.0
+Neecr=200
+Nmixed_samples=50000
+frac=  19.50
+alpha=0.0083
+------------------------------
+Model to compare with:
+data/pt/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz data/pt/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32.txt.xz
+fractions: 3.0 1.0
+Neecr=200
+Nmixed_samples=50000
+frac=   8.00
+alpha=0.0075
+------------------------------
+Model to compare with:
+data/jf/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz data/jf/sources/src_sample_M87_D18.5_Emin56_N10000_R1_Nside32.txt.xz
+fractions: 3.0 1.0
+Neecr=200
+Nmixed_samples=50000
+frac=   7.50
+alpha=0.0061
+------------------------------
+Model to compare with:
+data/jf_pl/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz data/jf_pl/sources/src_sample_M87_D18.5_Emin56_N10000_R1_Nside32.txt.xz
+fractions: 3.0 1.0
+Neecr=200
+Nmixed_samples=50000
+frac=   9.00
+alpha=0.0088
+------------------------------
+Model to compare with:
+data/jf_sol/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz data/jf_sol/sources/src_sample_M87_D18.5_Emin56_N10000_R1_Nside32.txt.xz
+fractions: 3.0 1.0
+Neecr=200
+Nmixed_samples=50000
+frac=   7.50
+alpha=0.0095
+------------------------------
+Model to compare with:
+data/tf/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz data/tf/sources/src_sample_M87_D18.5_Emin56_N10000_R1_Nside32.txt.xz
+fractions: 3.0 1.0
+Neecr=200
+Nmixed_samples=50000
+frac=  18.00
+alpha=0.0093
+------------------------------
+Model to compare with:
+data/pt/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz data/pt/sources/src_sample_M87_D18.5_Emin56_N10000_R1_Nside32.txt.xz
+fractions: 3.0 1.0
+Neecr=200
+Nmixed_samples=50000
+frac=   8.00
+alpha=0.0074
+------------------------------
+Model to compare with:
+data/jf/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz data/jf/sources/src_sample_NGC253_D3.5_Emin56_N10000_R1_Nside32.txt.xz
+fractions: 3.0 1.0
+Neecr=200
+Nmixed_samples=50000
+frac=   8.50
+alpha=0.0073
+------------------------------
+Model to compare with:
+data/jf_pl/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz data/jf_pl/sources/src_sample_NGC253_D3.5_Emin56_N10000_R1_Nside32.txt.xz
+fractions: 3.0 1.0
+Neecr=200
+Nmixed_samples=50000
+frac=  10.00
+alpha=0.0084
+------------------------------
+Model to compare with:
+data/jf_sol/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz data/jf_sol/sources/src_sample_NGC253_D3.5_Emin56_N10000_R1_Nside32.txt.xz
+fractions: 3.0 1.0
+Neecr=200
+Nmixed_samples=50000
+frac=   8.50
+alpha=0.0091
+------------------------------
+Model to compare with:
+data/tf/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz data/tf/sources/src_sample_NGC253_D3.5_Emin56_N10000_R1_Nside32.txt.xz
+fractions: 3.0 1.0
+Neecr=200
+Nmixed_samples=50000
+frac=  19.00
+alpha=0.0098
+------------------------------
+Model to compare with:
+data/pt/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz data/pt/sources/src_sample_NGC253_D3.5_Emin56_N10000_R1_Nside32.txt.xz
+fractions: 3.0 1.0
+Neecr=200
+Nmixed_samples=50000
+frac=   8.50
+alpha=0.0060
+------------------------------

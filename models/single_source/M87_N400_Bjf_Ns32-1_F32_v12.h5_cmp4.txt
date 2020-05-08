@@ -1,0 +1,14 @@
+Model to compare with:
+data/jf/sources/src_sample_M87_D18.5_Emin56_N100000_R1_Nside32_shift0.5.txt.xz
+Neecr=400
+Nmixed_samples=50000
+frac=   2.00
+alpha=0.0090
+------------------------------
+Model to compare with:
+data/jf/sources/src_sample_M87_D18.5_Emin56_N100000_R1_Nside32_shift2.0.txt.xz
+Neecr=400
+Nmixed_samples=50000
+frac=  16.50
+alpha=0.0095
+------------------------------

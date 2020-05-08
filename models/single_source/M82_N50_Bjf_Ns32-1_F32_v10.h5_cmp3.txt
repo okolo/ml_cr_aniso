@@ -1,0 +1,8 @@
+Model to compare with:
+data/jf/sources/src_sample_M82_D3.5_Emin56_N100000_R1_Nside32_shift-1.txt.xz data/jf/sources/src_sample_M82_D3.5_Emin56_N100000_R1_Nside32_shift-4.txt.xz data/jf/sources/src_sample_M82_D3.5_Emin56_N100000_R1_Nside32_shift-14.txt.xz data/jf/sources/src_sample_M82_D3.5_Emin56_N100000_R1_Nside32_shift-56.txt.xz
+fractions: 57.0 18.0 17.0 8.0
+Neecr= 50
+Nmixed_samples=50000
+frac=   6.00
+alpha=0.0025
+------------------------------

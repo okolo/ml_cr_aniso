@@ -1,0 +1,131 @@
+Model to compare with:
+data/jf/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32.txt.xz
+Neecr=500
+Nmixed_samples=50000
+frac=   2.20
+alpha=0.0076
+------------------------------
+Model to compare with:
+data/jf_pl/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32.txt.xz
+Neecr=500
+Nmixed_samples=50000
+frac=   3.40
+alpha=0.0078
+------------------------------
+Model to compare with:
+data/jf_sol/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32.txt.xz
+Neecr=500
+Nmixed_samples=50000
+frac=   2.60
+alpha=0.0079
+------------------------------
+Model to compare with:
+data/tf/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32.txt.xz
+Neecr=500
+Nmixed_samples=50000
+frac=   3.40
+alpha=0.0070
+------------------------------
+Model to compare with:
+data/pt/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32.txt.xz
+Neecr=500
+Nmixed_samples=50000
+frac=   2.00
+alpha=0.0053
+------------------------------
+Model to compare with:
+data/jf/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32_shift0.5.txt.xz
+Neecr=500
+Nmixed_samples=50000
+frac=   1.20
+alpha=0.0067
+------------------------------
+Model to compare with:
+data/jf/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32_shift2.0.txt.xz
+Neecr=500
+Nmixed_samples=50000
+frac=   7.00
+alpha=0.0094
+------------------------------
+Model to compare with:
+data/jf/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32_shift-14.txt.xz
+Neecr=500
+Nmixed_samples=50000
+frac=   1.00
+alpha=0.0030
+------------------------------
+Model to compare with:
+data/jf_pl/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32_shift0.5.txt.xz
+Neecr=500
+Nmixed_samples=50000
+frac=   1.80
+alpha=0.0070
+------------------------------
+Model to compare with:
+data/jf_pl/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32_shift2.0.txt.xz
+Neecr=500
+Nmixed_samples=50000
+frac=  16.40
+alpha=0.0098
+------------------------------
+Model to compare with:
+data/jf_pl/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32_shift-14.txt.xz
+Neecr=500
+Nmixed_samples=50000
+frac=   1.00
+alpha=0.0049
+------------------------------
+Model to compare with:
+data/jf_sol/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32_shift0.5.txt.xz
+Neecr=500
+Nmixed_samples=50000
+frac=   1.20
+alpha=0.0023
+------------------------------
+Model to compare with:
+data/jf_sol/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32_shift2.0.txt.xz
+Neecr=500
+Nmixed_samples=50000
+frac=   8.00
+alpha=0.0096
+------------------------------
+Model to compare with:
+data/jf_sol/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32_shift-14.txt.xz
+Neecr=500
+Nmixed_samples=50000
+frac=   0.80
+alpha=0.0085
+------------------------------
+Model to compare with:
+data/tf/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32_shift0.5.txt.xz
+Neecr=500
+Nmixed_samples=50000
+Model to compare with:
+data/tf/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32_shift2.0.txt.xz
+Neecr=500
+Nmixed_samples=50000
+Model to compare with:
+data/tf/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32_shift-14.txt.xz
+Neecr=500
+Nmixed_samples=50000
+Model to compare with:
+data/pt/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32_shift0.5.txt.xz
+Neecr=500
+Nmixed_samples=50000
+frac=   1.00
+alpha=0.0032
+------------------------------
+Model to compare with:
+data/pt/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32_shift2.0.txt.xz
+Neecr=500
+Nmixed_samples=50000
+frac=   2.80
+alpha=0.0075
+------------------------------
+Model to compare with:
+data/pt/sources/src_sample_M82_D3.5_Emin56_N10000_R1_Nside32_shift-14.txt.xz
+Neecr=500
+Nmixed_samples=50000
+frac=   0.80
+alpha=0.0006
+------------------------------
