@@ -93,7 +93,7 @@ def main():
     add_arg('--log_sample', action='store_true', help="sample f_src uniformly in log scale")
     add_arg('--f_src_max', type=float, help='maximal fraction of "from-source" EECRs [0,1]', default=1)
     add_arg('--f_src_min', type=float, help='minimal fraction of "from-source" EECRs [0,1]', default=0)
-    add_arg('--models', type=str, nargs='+', metavar='model', help='healpix NN(s) and/or D', default=['D'])
+    add_arg('--models', type=str, nargs='+', metavar='model', help='healpix NN(s)')
     add_arg('--labels', type=str, nargs='+', metavar='label', help='model labels', default=[])
     add_arg('--n_samples', type=int, help='number of samples', default=100000)
     add_arg('--alpha', type=float, nargs='+', metavar='alpha', help='type 1 maximal error', default=[0.01])
@@ -128,17 +128,13 @@ def main():
 
     curves = []
     for l, m in zip(labels, args.models):
-        if m.startswith('D_'):
-            lmax = int(m[2:])
-            import ps_d_model
-            model = ps_d_model.Model(args, lmax=lmax)
-            model.fit()
-        else:
-            model = train_healpix.create_model(gen.Ncells, pretrained=m)
+        model = train_healpix.create_model(gen.Ncells, pretrained=m)
 
+        save_data = {}
         for alpha in args.alpha:
             frac, beta, th_eta = calc_beta(gen, model, alpha, beta_threshold=args.beta_threshold)
             curves.append((l, alpha, frac, beta, th_eta))
+            save_data['alpha'] = (frac, beta, th_eta)
             del model
             with open(m + '.eta', mode='a') as out:
                 print(th_eta, args.beta_threshold, alpha, args.Neecr, file=out, end='')
@@ -148,7 +144,10 @@ def main():
                     for f, s in zip(args.fractions, args.sources):
                         print('\t', s, f, file=out, end='')
                     print(file=out)
-
+        outz = args.output
+        if len(l) > 0:
+            outz += ("_" + l)
+        np.savez(outz + '.npz', save_data)
     import matplotlib
     matplotlib.use('Agg')
 
