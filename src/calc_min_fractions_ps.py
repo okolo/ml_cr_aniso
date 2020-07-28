@@ -69,7 +69,7 @@ thr_idx = np.where(xi >= alpha_thr)[0][0]
 fracs = sorted(list(set(fractions)))
 
 def beta(i_f):
-    idx = np.where(fractions >= fracs[i_f])[0]
+    idx = np.where(fractions >= fracs[i_f])[0]  # TODO: fix bug: >= is wrong
     idx_left = np.where(idx < thr_idx)[0]
     return len(idx_left)/len(idx)
 

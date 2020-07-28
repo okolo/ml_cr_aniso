@@ -73,7 +73,7 @@ def load_src_sample(args, suffix='', sources=None):
                 yield np.genfromtxt(f, dtype=float)
 
 
-def f_sampler(args, n_samples=-1):  # if < 0, sample forever
+def f_sampler(args, n_samples=-1, exclude_iso=False):  # if < 0, sample forever
     Neecr = args.Neecr
     Fsrc = None
     if 0 <= args.f_src <= 1.:
@@ -85,16 +85,19 @@ def f_sampler(args, n_samples=-1):  # if < 0, sample forever
 
         N_src_min = np.round(args.f_src_min * Neecr)
         N_src_max = np.round(args.f_src_max * Neecr)
+        if exclude_iso:
+            N_src_min = max(1, N_src_min)
+            N_src_max = max(1, N_src_max)
+
         if N_src_min == N_src_max:
             Fsrc = N_src_min / Neecr
         elif args.log_sample:
-            if args.f_src_min == 0:
+            if args.f_src_min == 0 and not exclude_iso:
                 # make sure roughly equal amount of isotropic and mixture samples are generated
                 logNmin = np.log(1. / N_src_max)
             else:
-                logNmin = np.log(args.f_src_min * Neecr)
-
-            logNmax = np.log(args.f_src_max * Neecr)
+                logNmin = np.log((N_src_min-0.49))
+            logNmax = np.log((N_src_max + 0.49))
 
     n = 0
     if Fsrc is not None:
@@ -114,10 +117,19 @@ def f_sampler(args, n_samples=-1):  # if < 0, sample forever
 
 class SampleGenerator(keras.utils.Sequence):
     def __init__(self, args, deterministic=None, seed=0, n_samples=None, return_frac=False, suffix='*', sources=None,
-                 mixture=[]):
+                 mixture=[], add_iso=None, sampler="auto", batch_size=None):
+        if sampler == "auto":
+            self.sampler = f_sampler(args)
+        elif sampler == 0:
+            self.sampler = None  # isotropy
+        else:
+            self.sampler = sampler
         self.seed = seed
         self.return_frac = return_frac
-        self.add_iso = args.f_src_min > 0 or not args.log_sample
+        if add_iso is None:
+            self.add_iso = args.f_src_min > 0 or not args.log_sample
+        else:
+            self.add_iso = add_iso
         self.sources = sources
         self.__args = args
 
@@ -128,39 +140,38 @@ class SampleGenerator(keras.utils.Sequence):
             deterministic = args.deterministic
 
         self.deterministic = deterministic
-
-        self.n_batchs = int(np.ceil(n_samples / args.batch_size))
+        self.batch_size = batch_size if batch_size is not None else args.batch_size
+        self.n_batchs = int(np.ceil(n_samples / self.batch_size))
         batch_size = int(np.round(n_samples / self.n_batchs))
         if self.add_iso:
             batch_size = (batch_size//2)*2  # make sure batch_size is divisible of 2
 
-        if batch_size != args.batch_size:
+        if batch_size != self.batch_size:
             print('batch size adjusted to ', batch_size, file=stderr)
+            self.batch_size = batch_size
 
-        self.batch_size = batch_size
-
-        data_list = list(load_src_sample(args, suffix=suffix, sources=sources))
-        if len(mixture)>0:
-            assert len(mixture) == len(data_list), 'inconsistent mixture fractions'
-            self.source_part = np.array(mixture)/np.sum(mixture)
-        else:
-            self.source_part = None
         self.Neecr = args.Neecr
-        #self.n_batches = n_batches
-
         self.Ncells = hp.nside2npix(args.Nside)
-
-        # 2. Find non-zero lines, i.e., those with Z>0:
         self.healpix_src_cells = []
         self.nonz_number = []
-        for data in data_list:
-            tp = np.arange(0, np.size(data[:, 0]))
-            nonz = tp[data[:, 5] > 0]
-            assert len(nonz) >= args.Neecr
-            self.nonz_number.append(len(nonz))
-            # These are numbers of cells on the healpix grid occupied by the
-            # nuclei in the infile
-            self.healpix_src_cells.append(data[nonz, 7].astype(int))
+        self.source_part = None
+
+        if self.sampler is not None:  # not isotropy
+            data_list = list(load_src_sample(args, suffix=suffix, sources=sources))
+            if len(mixture)>0:
+                assert len(mixture) == len(data_list), 'inconsistent mixture fractions'
+                self.source_part = np.array(mixture)/np.sum(mixture)
+
+            # 2. Find non-zero lines, i.e., those with Z>0:
+
+            for data in data_list:
+                tp = np.arange(0, np.size(data[:, 0]))
+                nonz = tp[data[:, 5] > 0]
+                assert len(nonz) >= args.Neecr
+                self.nonz_number.append(len(nonz))
+                # These are numbers of cells on the healpix grid occupied by the
+                # nuclei in the infile
+                self.healpix_src_cells.append(data[nonz, 7].astype(int))
 
         self.Nside = args.Nside
         self.threshold = args.threshold
@@ -172,16 +183,14 @@ class SampleGenerator(keras.utils.Sequence):
         if self.deterministic:
             np.random.seed(idx + self.seed)
 
-        sampler = f_sampler(self.__args)
-
         healpix_map = np.zeros((self.batch_size, self.Ncells), dtype=float)
         answers = np.zeros(self.batch_size)
         for i in range(self.batch_size):
-            if self.add_iso and i % 2 == 0:
+            if self.sampler is None or (self.add_iso and i % 2 == 0):
                 Nsrc = 0
                 Niso = self.Neecr
             else:
-                Nsrc, Niso = sampler.__next__()
+                Nsrc, Niso = self.sampler.__next__()
 
             if Nsrc > 0:
                 if self.source_part is not None:  # mixture of events from different sources in one sample
@@ -255,33 +264,104 @@ def plot_learning_curves(history, save_file=None, show_fig=False):
     except Exception:
         pass
 
-def calc_detectable_frac(gen, model, args):
-    save = gen.return_frac
-    gen.return_frac = True
-    frac = xi = None
-    for batch in range(len(gen)):
-        maps, batch_frac = gen.__getitem__(batch)
-        batch_xi = model.predict(maps).flatten()
-        if batch == 0:
-            frac = batch_frac
-            xi = batch_xi
-        else:
-            frac = np.concatenate((frac, batch_frac))
-            xi = np.concatenate((xi, batch_xi))
 
-    gen.return_frac = save
+def calc_beta(gen, model, _alpha, gen2=None):
+    """
+    :param gen: sample generator
+    :param model: NN model
+    :param alpha: maximal type I error
+    :param gen2: if gen2 is not None gen output is used for 0-hypothesis and gen2 for alternative
+    otherwise frac > 0 condition is used
+    :return: (frac, alpha) minimal fraction of source events in alternative (gen2) hypothesis and precise alpha or (1., 1.) if detection is impossible
+    """
+    data = [gen] if gen2 is None else [gen, gen2]
+    src = xi = frac = None
+    for i, g in enumerate(data):
+        save = g.return_frac
+        g.return_frac = True
+        for batch in range(len(g)):
+            maps, batch_frac = g.__getitem__(batch)
+            batch_xi = model.predict(maps).flatten()
+            if gen2 is None:
+                batch_src = batch_frac > 0
+            else:
+                batch_src = np.full(len(batch_frac), i == 0)
+            if src is None:
+                src = batch_src
+                xi = batch_xi
+                frac = batch_frac
+            else:
+                src = np.concatenate((src, batch_src))
+                xi = np.concatenate((xi, batch_xi))
+                frac = np.concatenate((frac, batch_frac))
+        g.return_frac = save
 
-    src = frac > 0
-    iso = np.logical_not(src)
-    iso_xi = xi[iso]
+    h0 = np.logical_not(src)  # is 0-hypothesis
+    h0_xi = xi[h0]
+    xi = xi[src]
+
+    if np.mean(h0_xi) > np.mean(xi):  # below we assume <h0_xi>  <=  <xi>
+        xi *= -1.
+        h0_xi *= -1.
+
+    alpha_thr = np.quantile(h0_xi, 1. - _alpha)
+
+    # sort by xi
+    xi = np.sort(xi)
+
+    thr_idx = np.where(xi >= alpha_thr)[0][0]
+    beta = thr_idx/len(xi)
+
+    return beta
+
+
+def calc_detectable_frac(gen, model, args, gen2=None, swap_h0_and_h1=False):
+    """
+    :param gen: sample generator
+    :param model: NN model
+    :param args: parameters object (should contain alpha and beta attributes)
+    :param gen2: if gen2 is not None gen output is used for 0-hypothesis and gen2 for alternative
+    otherwise frac > 0 condition is used
+    :return: (frac, alpha) minimal fraction of source events in alternative (gen2) hypothesis and precise alpha or (1., 1.) if detection is impossible
+    """
+    if swap_h0_and_h1:
+        _alpha = args.beta
+        _beta = args.alpha
+    else:
+        _alpha = args.alpha
+        _beta = args.beta
+    data = [gen] if gen2 is None else [gen, gen2]
+    src = xi = frac = None
+    for i, g in enumerate(data):
+        save = g.return_frac
+        g.return_frac = True
+        for batch in range(len(g)):
+            maps, batch_frac = g.__getitem__(batch)
+            batch_xi = model.predict(maps).flatten()
+            if gen2 is None:
+                batch_src = batch_frac > 0
+            else:
+                batch_src = np.full(len(batch_frac), i == 0)
+            if src is None:
+                src = batch_src
+                xi = batch_xi
+                frac = batch_frac
+            else:
+                src = np.concatenate((src, batch_src))
+                xi = np.concatenate((xi, batch_xi))
+                frac = np.concatenate((frac, batch_frac))
+        g.return_frac = save
+
+    h0 = np.logical_not(src)  # is 0-hypothesis
+    h0_xi = xi[h0]
     fractions = frac[src]
     xi = xi[src]
 
-    if np.mean(iso_xi) > np.mean(xi):  # below we assume <iso_xi>  <=  <xi>
+    if np.mean(h0_xi) > np.mean(xi):  # below we assume <h0_xi>  <=  <xi>
         xi *= -1.
-        iso_xi *= -1.
+        h0_xi *= -1.
 
-    alpha_thr = np.quantile(iso_xi, 1. - args.alpha)
+    alpha_thr = np.quantile(h0_xi, 1. - _alpha)
 
     # sort by xi
     idx = np.argsort(xi)
@@ -293,14 +373,14 @@ def calc_detectable_frac(gen, model, args):
     fracs = sorted(list(set(fractions)))
 
     def beta(i_f):
-        idx = np.where(fractions >= fracs[i_f])[0]
+        idx = np.where(fractions >= fracs[i_f])[0]   # TODO: fix bug: >= is wrong
         idx_left = np.where(idx < thr_idx)[0]
         return len(idx_left) / len(idx)
 
     def alpha(i_f):
-        thr = np.quantile(xi[fractions >= fracs[i_f]], args.beta)
-        idx_right = np.where(iso_xi > thr)[0]
-        return len(idx_right) / len(iso_xi)
+        thr = np.quantile(xi[fractions >= fracs[i_f]], _beta)
+        idx_right = np.where(h0_xi > thr)[0]
+        return len(idx_right) / len(h0_xi)
 
     l = 0
     r = len(fracs) - 1
@@ -308,14 +388,14 @@ def calc_detectable_frac(gen, model, args):
     beta_l = beta(l)
     beta_r = beta(r)
 
-    if beta_r > args.beta:
+    if beta_r > _beta:
         print('solution not found', file=stderr)
         return 1., 1.
 
-    if beta_r == args.beta:
+    if beta_r == _beta:
         l = r
 
-    if beta_l <= args.beta:
+    if beta_l <= _beta:
         print('all mixed samples satisfy criterion', file=stderr)
         r = l
 
@@ -323,18 +403,23 @@ def calc_detectable_frac(gen, model, args):
 
     while r > l + 2:
         b = beta(i)
-        if b > args.beta:
+        if b > _beta:
             l = i
-        elif b < args.beta:
+        elif b < _beta:
             r = i
         else:
             break
         i = (l + r) // 2
 
-    if beta(i) > args.beta:
+    if beta(i) > _beta:
         i += 1
 
-    return fracs[i], alpha(i)
+    if swap_h0_and_h1:
+        type_I_error_P = beta(i)
+    else:
+        type_I_error_P = alpha(i)
+
+    return fracs[i], type_I_error_P
 
 def main():
     cline_parser = argparse.ArgumentParser(description='Train network',

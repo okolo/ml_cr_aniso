@@ -12,7 +12,6 @@ def add_arg(*pargs, **kwargs):
 add_arg('--f_src', type=float, help='fraction of "from-source" EECRs [0,1] or -1 for random', default=-1)
 add_arg('--Neecr', type=int, help='Total number of EECRs in each sample', default=500)
 add_arg('--Emin', type=int, help='Emin in EeV for which the input sample was generated', default=56)
-add_arg('--Nmixed_samples', type=int, help='Number of mixed samples (i.e., the sample size)', default=1000)
 # add_arg('--source_id', type=str,
 #         help='source (CenA, NGC253, M82, M87 or FornaxA) or comma separated list of sources or "all"',
 #         default='CenA')
@@ -42,6 +41,14 @@ args = cline_parser.parse_args()
 if len(args.fractions) > 0:
     assert len(args.fractions) == len(args.sources) and len(args.sources) > 1
 
+gen = train_healpix.SampleGenerator(
+    args, deterministic=True, sources=args.sources, suffix=args.suffix, seed=args.seed, mixture=args.fractions
+)
+
+model = train_healpix.create_model(gen.Ncells, pretrained=args.model)
+frac, alpha = train_healpix.calc_detectable_frac(gen, model, args)
+print(frac, alpha)
+
 out_file = args.model + "_cmp.txt"
 with open(out_file, "a") as d:
     print("Model to compare with:", file=d)
@@ -50,15 +57,6 @@ with open(out_file, "a") as d:
         print('fractions:', *args.fractions, file=d)
     print("Neecr={:3d}".format(args.Neecr), file=d)
     print("Nmixed_samples={:5d}".format(args.n_samples), file=d)
-
-gen = train_healpix.SampleGenerator(
-    args, deterministic=True, sources=args.sources, suffix=args.suffix, seed=args.seed, mixture=args.fractions
-)
-model = train_healpix.create_model(gen.Ncells, pretrained=args.model)
-frac, alpha = train_healpix.calc_detectable_frac(gen, model, args)
-print(frac, alpha)
-
-with open(out_file, "a") as d:
     d.write("frac={:7.2f}\n".format(frac*100))
     d.write("alpha={:6.4f}\n".format(alpha))
     d.write("------------------------------\n")
