@@ -141,7 +141,13 @@ def main():
             curves.append((l, alpha, frac, beta, th_eta))
             del model
             with open(m + '.eta', mode='a') as out:
-                print(th_eta, args.beta_threshold, alpha, args.Neecr, *args.sources, file=out)
+                print(th_eta, args.beta_threshold, alpha, args.Neecr, file=out, end='')
+                if len(args.sources) == 1:
+                    print('\t', *args.sources, file=out)
+                else:
+                    for f, s in zip(args.fractions, args.sources):
+                        print('\t', s, f, file=out, end='')
+                    print(file=out)
 
     import matplotlib
     matplotlib.use('Agg')
