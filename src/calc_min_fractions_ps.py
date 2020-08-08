@@ -64,52 +64,28 @@ idx = np.argsort(xi)
 fractions = fractions[idx]
 xi = xi[idx]
 
+
 thr_idx = np.where(xi >= alpha_thr)[0][0]
 
-fracs = sorted(list(set(fractions)))
+fracs = np.array(sorted(list(set(fractions))))
 
-def beta(i_f):
-    idx = np.where(fractions >= fracs[i_f])[0]  # TODO: fix bug: >= is wrong
+beta = np.zeros_like(fracs)
+
+for i_f, f in enumerate(fracs):
+    idx = np.where(fractions == fracs[i_f])[0]
     idx_left = np.where(idx < thr_idx)[0]
-    return len(idx_left)/len(idx)
+    beta[i_f] = len(idx_left)/len(idx)
 
-def alpha(i_f):
-    thr = np.quantile(xi[fractions >= fracs[i_f]], args.beta)
-    idx_right = np.where(iso_xi > thr)[0]
-    return len(idx_right) / len(iso_xi)
+th_eta = 1.
 
+i = np.where(beta < args.beta)[0]
+if len(i) > 0:
+    th_eta = fracs[i[0]]
 
-l = 0
-r = len(fracs) - 1
+table = np.hstack((fracs.reshape((-1, 1)), beta.reshape((-1, 1))))
+output_file_name = args.mixed[0].replace('.npz','').replace('*','XXX') + '.beta'
+np.savetxt(output_file_name, table, fmt='%g', header='#frac\tbeta')
 
-beta_l = beta(l)
-beta_r = beta(r)
+print(th_eta)
 
-if beta_r > args.beta:
-    print('solution not found', file=stderr)
-    exit(1)
-
-if beta_r == args.beta:
-    l = r
-
-if beta_l <= args.beta:
-    print('all mixed samples satisfy criterion', file=stderr)
-    r = l
-
-i = (l + r) // 2
-
-while r > l + 2:
-    b = beta(i)
-    if b > args.beta:
-        l = i
-    elif b < args.beta:
-        r = i
-    else:
-        break
-    i = (l + r) // 2
-
-if beta(i) > args.beta:
-    i += 1
-
-print(fracs[i], alpha(i))
 exit(0)
