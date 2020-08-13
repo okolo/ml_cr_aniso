@@ -44,7 +44,7 @@ gmf_dir = 'jf'
 Nini = 10000
 
 # Mass composition shift used for map generation
-shiftA = '0'
+shiftA = '1'
 
 #_________________________  parsing command line
 
