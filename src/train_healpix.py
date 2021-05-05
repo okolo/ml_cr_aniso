@@ -264,57 +264,6 @@ def plot_learning_curves(history, save_file=None, show_fig=False):
     except Exception:
         pass
 
-
-def calc_beta(gen, model, _alpha, gen2=None):
-    """
-    :param gen: sample generator
-    :param model: NN model
-    :param alpha: maximal type I error
-    :param gen2: if gen2 is not None gen output is used for 0-hypothesis and gen2 for alternative
-    otherwise frac > 0 condition is used
-    :return: (frac, alpha) minimal fraction of source events in alternative (gen2) hypothesis and precise alpha or (1., 1.) if detection is impossible
-    """
-    data = [gen] if gen2 is None else [gen, gen2]
-    src = xi = frac = None
-    for i, g in enumerate(data):
-        save = g.return_frac
-        g.return_frac = True
-        for batch in range(len(g)):
-            maps, batch_frac = g.__getitem__(batch)
-            batch_xi = model.predict(maps).flatten()
-            if gen2 is None:
-                batch_src = batch_frac > 0
-            else:
-                batch_src = np.full(len(batch_frac), i == 0)
-            if src is None:
-                src = batch_src
-                xi = batch_xi
-                frac = batch_frac
-            else:
-                src = np.concatenate((src, batch_src))
-                xi = np.concatenate((xi, batch_xi))
-                frac = np.concatenate((frac, batch_frac))
-        g.return_frac = save
-
-    h0 = np.logical_not(src)  # is 0-hypothesis
-    h0_xi = xi[h0]
-    xi = xi[src]
-
-    if np.mean(h0_xi) > np.mean(xi):  # below we assume <h0_xi>  <=  <xi>
-        xi *= -1.
-        h0_xi *= -1.
-
-    alpha_thr = np.quantile(h0_xi, 1. - _alpha)
-
-    # sort by xi
-    xi = np.sort(xi)
-
-    thr_idx = np.where(xi >= alpha_thr)[0][0]
-    beta = thr_idx/len(xi)
-
-    return beta
-
-
 def calc_detectable_frac(gen, model, args, gen2=None, swap_h0_and_h1=False):
     """
     :param gen: sample generator
@@ -341,7 +290,7 @@ def calc_detectable_frac(gen, model, args, gen2=None, swap_h0_and_h1=False):
             if gen2 is None:
                 batch_src = batch_frac > 0
             else:
-                batch_src = np.full(len(batch_frac), i == 0)
+                batch_src = np.full(len(batch_frac), i == 1)
             if src is None:
                 src = batch_src
                 xi = batch_xi
@@ -373,7 +322,9 @@ def calc_detectable_frac(gen, model, args, gen2=None, swap_h0_and_h1=False):
     fracs = sorted(list(set(fractions)))
 
     def beta(i_f):
-        idx = np.where(fractions >= fracs[i_f])[0]   # TODO: fix bug: >= is wrong
+        idx = np.where(fractions >= fracs[i_f])[0]
+        # TODO: fix bug: >= is wrong (for correct implementation see beta.calc_beta_eta)
+
         idx_left = np.where(idx < thr_idx)[0]
         return len(idx_left) / len(idx)
 
