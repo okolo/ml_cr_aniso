@@ -1,7 +1,7 @@
 import numpy as np
 import argparse
 import losses
-from tensorflow import keras
+from tensorflow import keras #  import   keras
 import time
 import matplotlib
 from os import path, remove
@@ -118,6 +118,18 @@ def f_sampler(args, n_samples=-1, exclude_iso=False):  # if < 0, sample forever
 class SampleGenerator(keras.utils.Sequence):
     def __init__(self, args, deterministic=None, seed=0, n_samples=None, return_frac=False, suffix='*', sources=None,
                  mixture=[], add_iso=None, sampler="auto", batch_size=None):
+        min_lg_E = np.log10(args.Emin) + args.EminBinShift * args.lgEbin
+        sigmaLgE = args.sigmaLgE
+        lgEbin = args.lgEbin
+        self.n_bins_lgE = int((np.log10(args.Emax)-min_lg_E)/lgEbin + 0.5)
+        from scipy.stats import norm
+        bin_diff_weights = np.zeros(self.n_bins_lgE)
+        for nb in range(self.n_bins_lgE):
+            x1 = (nb - 0.5) * lgEbin
+            x2 = (nb + 0.5) * lgEbin
+            bin_diff_weights[nb] = norm.cdf(x2, scale=sigmaLgE) - norm.cdf(x1, scale=sigmaLgE)
+        bin_diff_weights = np.hstack((np.flip(bin_diff_weights), bin_diff_weights[1:]))
+
         if sampler == "auto":
             self.sampler = f_sampler(args)
         elif sampler == 0:
@@ -153,9 +165,10 @@ class SampleGenerator(keras.utils.Sequence):
         self.Neecr = args.Neecr
         self.Ncells = hp.nside2npix(args.Nside)
         self.healpix_src_cells = []
+        self.probabilities = []
+        self.energy_probabilities = []
         self.nonz_number = []
         self.source_part = None
-
         if self.sampler is not None:  # not isotropy
             data_list = list(load_src_sample(args, suffix=suffix, sources=sources))
             if len(mixture)>0:
@@ -165,13 +178,26 @@ class SampleGenerator(keras.utils.Sequence):
             # 2. Find non-zero lines, i.e., those with Z>0:
 
             for data in data_list:
-                tp = np.arange(0, np.size(data[:, 0]))
-                nonz = tp[data[:, 5] > 0]
+                nonz = np.where(data[:, 5] > 0)[0]
+                data = data[nonz]
+                binE = ((np.log10(data[:, 6])-min_lg_E)/lgEbin).astype(np.int)
+                #  tp = np.arange(0, np.size(data[:, 0]))
+                nonz = np.where((binE >= 0) & (binE < self.n_bins_lgE))[0]  # tp[data[:, 5] > 0]
                 assert len(nonz) >= args.Neecr
-                self.nonz_number.append(len(nonz))
+
                 # These are numbers of cells on the healpix grid occupied by the
                 # nuclei in the infile
-                self.healpix_src_cells.append(data[nonz, 7].astype(int))
+
+                healpix_src_cells = data[nonz, 7].astype(int)
+                self.healpix_src_cells.append(healpix_src_cells)
+                binE = binE[nonz]
+                weights_idx = self.n_bins_lgE-binE-1
+                weights = [bin_diff_weights[idx:idx + self.n_bins_lgE] for idx in weights_idx]
+                probabilities = np.vstack(weights)
+                probabilities /= np.sum(probabilities)  # normalize to unit total
+                self.energy_probabilities.append(np.sum(probabilities, axis=0))
+                self.probabilities.append(probabilities.ravel())
+                self.nonz_number.append(len(nonz))
 
         self.Nside = args.Nside
         self.threshold = args.threshold
@@ -183,7 +209,7 @@ class SampleGenerator(keras.utils.Sequence):
         if self.deterministic:
             np.random.seed(idx + self.seed)
 
-        healpix_map = np.zeros((self.batch_size, self.Ncells), dtype=float)
+        healpix_map = np.zeros((self.batch_size, self.Ncells, self.n_bins_lgE), dtype=float)
         answers = np.zeros(self.batch_size)
         for i in range(self.batch_size):
             if self.sampler is None or (self.add_iso and i % 2 == 0):
@@ -198,44 +224,49 @@ class SampleGenerator(keras.utils.Sequence):
                     counts = zip(*np.unique(sampled_src, return_counts=True))
                 else:  # samples, containing events from single source
                     f_idx = 0
-                    if len(self.nonz_number) > 1:
-                        f_idx = np.random.randint(0, len(self.nonz_number))  # select random file
+                    n_files = len(self.healpix_src_cells)
+                    if n_files > 1:
+                        f_idx = np.random.randint(0, n_files)  # select random file
                     counts = [(f_idx, Nsrc)]
                 for file_idx, n_src in counts:
+                    p = self.probabilities[file_idx]
+                    idxs = np.random.choice(len(p), n_src, replace=True, p=p)
+                    healpix_cell_idxs = idxs // self.n_bins_lgE
+                    energy_bin_idxs = idxs % self.n_bins_lgE
 
-                    nonz_number = self.nonz_number[file_idx]
-                    healpix_src_cells = self.healpix_src_cells[file_idx]
+                    #nonz_number = self.nonz_number[file_idx]
+                    healpix_src_cells = self.healpix_src_cells[file_idx][healpix_cell_idxs]
 
-                    # Create a random sample of from-source events:
-                    src_sample = np.random.choice(nonz_number, n_src, replace=False)
-
-                    # Cells of the healpix grid "occupied" by the from-source sample
-                    src_cells = healpix_src_cells[src_sample]
-
-                    # This is a simple way to define the map. It assumes
-                    # only one EECR gets in a cell. Works OK for Nside=512.
-                    # healpix_map[src_cells] = 1
-
-                    # "cells" is an intermediate variable to simplify the code.
-                    # It consists of two arrays: [0] is a list of unique cells,
-                    # [1] is their multiplicity.
-                    cells = np.unique(src_cells, return_counts=True)
-                    healpix_map[i, cells[0]] += cells[1]
+                    for e_idx, cell_idx in zip(energy_bin_idxs, healpix_src_cells):
+                        healpix_map[i, cell_idx, e_idx] += 1
 
             if Niso > 0:
-                # A sample of events from the isotropic background
-                # np.random.seed(iso_random_seed)
-                lon_iso = np.random.uniform(-np.pi, np.pi, Niso)
-                lat_iso = np.arccos(np.random.uniform(-1, 1, Niso)) - np.pi / 2.
+                # ensure same average energy spectrum is used as in anisotropic case
+                if self.source_part is not None:  # mixture of events from different sources in one sample
+                    sampled_src = np.random.choice(len(self.source_part ), Niso, p=self.source_part)
+                    counts = zip(*np.unique(sampled_src, return_counts=True))
+                else:  # samples, containing events from single source
+                    f_idx = 0
+                    n_files = len(self.healpix_src_cells)
+                    if n_files > 1:
+                        f_idx = np.random.randint(0, n_files)  # select random file
+                    counts = [(f_idx, Niso)]
 
-                # Cells "occupied" by the isotropic sample in the healpix grid
-                iso_cells = hp.ang2pix(self.Nside, np.rad2deg(lon_iso),
-                                       np.rad2deg(lat_iso), lonlat=True)
+                for file_idx, n_src in counts:
+                    p = self.energy_probabilities[file_idx]
+                    energy_bin_idxs = np.random.choice(len(p), n_src, replace=True, p=p)
 
-                # healpix_map[iso_cells] = 1
-                # Similar to the above
-                cells = np.unique(iso_cells, return_counts=True)
-                healpix_map[i, cells[0]] += cells[1]
+                    # A sample of events from the isotropic background
+                    # np.random.seed(iso_random_seed)
+                    lon_iso = np.random.uniform(-np.pi, np.pi, n_src)
+                    lat_iso = np.arccos(np.random.uniform(-1, 1, n_src)) - np.pi / 2.
+
+                    # Cells "occupied" by the isotropic sample in the healpix grid
+                    iso_cells = hp.ang2pix(self.Nside, np.rad2deg(lon_iso),
+                                           np.rad2deg(lat_iso), lonlat=True)
+
+                    for e_idx, cell_idx in zip(energy_bin_idxs, iso_cells):
+                        healpix_map[i, cell_idx, e_idx] += 1
 
             answers[i] = Nsrc / self.Neecr
 
@@ -429,10 +460,13 @@ def main():
     def add_arg(*pargs, **kwargs):
         cline_parser.add_argument(*pargs, **kwargs)
 
+    sigmaLgE = 0.1
+    lgEbin = 0.05
 
     add_arg('--f_src', type=float, help='fraction of "from-source" EECRs [0,1] or -1 for random', default=-1)
     add_arg('--Neecr', type=int, help='Total number of EECRs in each sample', default=500)
     add_arg('--Emin', type=int, help='Emin in EeV for which the input sample was generated', default=56)
+    add_arg('--EminBinShift', type=int, help='Shift between minimal bin energy and Emin', default=2)
     # add_arg('--Nmixed_samples', type=int, help='Number of mixed samples (i.e., the sample size)', default=1000)
     add_arg('--source_id', type=str, help='source (CenA, NGC253, M82, M87 or FornaxA) or comma separated list of sources or "all"',
             default='CenA')
@@ -464,7 +498,9 @@ def main():
     add_arg('--alpha', type=float, help='type 1 maximal error', default=0.01)
     add_arg('--beta', type=float, help='type 2 maximal error', default=0.05)
     add_arg('--min_version', type=int, help='minimal version number for output naming', default=0)
-
+    add_arg('--sigmaLgE', type=float, help='Log10 energy resolution', default=sigmaLgE)
+    add_arg('--lgEbin', type=float, help='Log10 energy bin', default=lgEbin)
+    add_arg('--Emax', type=int, help='maximal binning energy in EeV', default=300)
 
     args = cline_parser.parse_args()
 
@@ -615,7 +651,7 @@ def main():
 
 
 
-    model = create_model(train_gen.Ncells, nside_min=args.nside_min, n_filters=args.n_filters,
+    model = create_model(train_gen.Ncells, n_energy_bins=train_gen.n_bins_lgE, nside_min=args.nside_min, n_filters=args.n_filters,
                          inner_layer_sizes=inner_layers, pretrained=args.pretrained)
 
     if args.pretrained and len(args.output_prefix) == 0:

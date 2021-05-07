@@ -1,7 +1,7 @@
 import nnhealpix
 from nnhealpix.layers import ConvNeighbours, MaxPooling
-import keras
-from keras.layers import Dense, Dropout, BatchNormalization, Reshape, Flatten
+from tensorflow import keras
+from tensorflow.keras.layers import Dense, Dropout, BatchNormalization, Reshape, Flatten
 import numpy as np
 import sys
 
@@ -14,10 +14,10 @@ custom_objects={
         'OrderMap': nnhealpix.layers.OrderMap
      }
 
-def create_model(input_dim, nside_min = 32, inner_layer_sizes = [],
+def create_model(input_dim, n_energy_bins=1, nside_min=32, inner_layer_sizes=[],
                  n_filters=32, pretrained='', l2=0, dropout_rate=0.,
                  normalize=False,  activation='relu', output_activation = 'sigmoid',
-                 loss='binary_crossentropy', metrics='accuracy'):
+                 loss='binary_crossentropy', metrics='accuracy', lr=1.):
     nside = np.sqrt(input_dim / 12)
     if np.round(nside) != nside:
         raise ValueError('unexpected input_dim for cnn_healpix.create_model')
@@ -36,7 +36,10 @@ def create_model(input_dim, nside_min = 32, inner_layer_sizes = [],
             else:
                 raise sys.exc_info()  # pass the exception
     else:
-        input = keras.Input((input_dim,))
+        if n_energy_bins == 1:
+            input = keras.Input((input_dim,))
+        else:
+            input = keras.Input((input_dim, n_energy_bins))
         x = input
         reg = keras.regularizers.l2(l2)
         if normalize:
@@ -44,7 +47,7 @@ def create_model(input_dim, nside_min = 32, inner_layer_sizes = [],
 
         do_conv = (nside>nside_min)
 
-        if do_conv:
+        if do_conv and n_energy_bins == 1:
             x = Reshape((-1, 1))(x)
 
         while nside>nside_min:
@@ -68,7 +71,7 @@ def create_model(input_dim, nside_min = 32, inner_layer_sizes = [],
 
         model = keras.Model(inputs=[input], outputs=[out])
 
-    optimizer = keras.optimizers.Adadelta()
+    optimizer = keras.optimizers.Adadelta(learning_rate=lr)
     model.compile(loss=loss,
               optimizer=optimizer, metrics=[metrics])
 
