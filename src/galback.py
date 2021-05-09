@@ -148,7 +148,8 @@ if GMF == "JF12":
         GMF = GMF + 'T'
 
 elif GMF == "JF12sol":
-    B = JF12FieldSolenoidal(delta = delta_sol * kpc, zs = zs_sol * kpc)
+    #B = JF12FieldSolenoidal(delta = delta_sol * kpc, zs = zs_sol * kpc)
+    B = JF12FieldSolenoidal(delta_sol * kpc, zs_sol * kpc)
 
     # Basename of an output file
     output_file = ('data/jf_sol/' + str(Nside) + '/' + nucleus
