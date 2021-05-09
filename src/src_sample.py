@@ -278,12 +278,15 @@ for i in np.arange(N_files):
 
             # OK, this is for the output file
             for j in sample:
-                outdata[k,0:4] = summary[j,0:4]
-                outdata[k,4] = ang_sep[j]
-                outdata[k,5] = Z[i]
-                outdata[k,6] = E[i]
-                outdata[k,7] = j
-                k += 1
+                try:
+                    outdata[k,0:4] = summary[j,0:4]
+                    outdata[k,4] = ang_sep[j]
+                    outdata[k,5] = Z[i]
+                    outdata[k,6] = E[i]
+                    outdata[k,7] = j
+                    k += 1
+                except IndexError as er:  # temporary fix or rare error TODO: find out the reason of
+                    print('skipping sample', j, ':', er, file=sys.stderr)
 
             summary = []
 
