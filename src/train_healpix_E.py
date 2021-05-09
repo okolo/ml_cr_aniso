@@ -118,13 +118,23 @@ def f_sampler(args, n_samples=-1, exclude_iso=False):  # if < 0, sample forever
 class SampleGenerator(keras.utils.Sequence):
     def __init__(self, args, deterministic=None, seed=0, n_samples=None, return_frac=False, suffix='*', sources=None,
                  mixture=[], add_iso=None, sampler="auto", batch_size=None):
-        min_lg_E = np.log10(args.Emin) + args.EminBinShift * args.lgEbin
-        sigmaLgE = args.sigmaLgE
+        min_lg_E = np.log10(args.EminBin)
+        sigmaLgE = args.sigmaLnE / np.log(10.)
+        eminSigmaDif = 3
+
+        if min_lg_E - np.log10(args.Emin) < eminSigmaDif * sigmaLgE:
+            validEmin = 10**(min_lg_E - eminSigmaDif * sigmaLgE)
+            validEminBin = 10**(np.log10(args.Emin) + eminSigmaDif * sigmaLgE)
+            message = 'use Emin < {} or EminBin >{} or choose smaller sigmaLnE (difference must be larger then {} sigma)'.format(validEmin, validEminBin, eminSigmaDif)
+            raise ValueError(message)
+
+
         lgEbin = args.lgEbin
         self.n_bins_lgE = int((np.log10(args.Emax)-min_lg_E)/lgEbin + 0.5)
         from scipy.stats import norm
-        bin_diff_weights = np.zeros(self.n_bins_lgE)
-        for nb in range(self.n_bins_lgE):
+        n_weight_calc_bins = 2 * self.n_bins_lgE  # can be any sufficiently large number
+        bin_diff_weights = np.zeros(n_weight_calc_bins)
+        for nb in range(n_weight_calc_bins):
             x1 = (nb - 0.5) * lgEbin
             x2 = (nb + 0.5) * lgEbin
             bin_diff_weights[nb] = norm.cdf(x2, scale=sigmaLgE) - norm.cdf(x1, scale=sigmaLgE)
@@ -182,7 +192,7 @@ class SampleGenerator(keras.utils.Sequence):
                 data = data[nonz]
                 binE = ((np.log10(data[:, 6])-min_lg_E)/lgEbin).astype(np.int)
                 #  tp = np.arange(0, np.size(data[:, 0]))
-                nonz = np.where((binE >= 0) & (binE < self.n_bins_lgE))[0]  # tp[data[:, 5] > 0]
+                nonz = np.where((binE >= -self.n_bins_lgE) & (binE < self.n_bins_lgE))[0]  # tp[data[:, 5] > 0]
                 assert len(nonz) >= args.Neecr
 
                 # These are numbers of cells on the healpix grid occupied by the
@@ -191,9 +201,9 @@ class SampleGenerator(keras.utils.Sequence):
                 healpix_src_cells = data[nonz, 7].astype(int)
                 self.healpix_src_cells.append(healpix_src_cells)
                 binE = binE[nonz]
-                weights_idx = self.n_bins_lgE-binE-1
+                weights_idx = n_weight_calc_bins-binE-1
                 weights = [bin_diff_weights[idx:idx + self.n_bins_lgE] for idx in weights_idx]
-                probabilities = np.vstack(weights)
+                probabilities = np.vstack(weights)  # increase n_weight_calc_bins if weights entries have different sizes
                 probabilities /= np.sum(probabilities)  # normalize to unit total
                 self.energy_probabilities.append(np.sum(probabilities, axis=0))
                 self.probabilities.append(probabilities.ravel())
@@ -460,7 +470,6 @@ def main():
     def add_arg(*pargs, **kwargs):
         cline_parser.add_argument(*pargs, **kwargs)
 
-    sigmaLgE = 0.1
     lgEbin = 0.05
 
     add_arg('--f_src', type=float, help='fraction of "from-source" EECRs [0,1] or -1 for random', default=-1)
@@ -498,9 +507,10 @@ def main():
     add_arg('--alpha', type=float, help='type 1 maximal error', default=0.01)
     add_arg('--beta', type=float, help='type 2 maximal error', default=0.05)
     add_arg('--min_version', type=int, help='minimal version number for output naming', default=0)
-    add_arg('--sigmaLgE', type=float, help='Log10 energy resolution', default=sigmaLgE)
+    add_arg('--sigmaLnE', type=float, help='deltaE/E energy resolution', default=0.2)
     add_arg('--lgEbin', type=float, help='Log10 energy bin', default=lgEbin)
     add_arg('--Emax', type=int, help='maximal binning energy in EeV', default=300)
+    add_arg('--EminBin', type=float, help='minimal binning energy in EeV', default=56)
 
     args = cline_parser.parse_args()
 
