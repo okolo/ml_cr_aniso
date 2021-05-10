@@ -1,6 +1,6 @@
 import numpy as np
 
-def calc_beta(gen, model, alpha, gen2=None, beta_threshold=None):
+def calc_beta_eta(gen, model, alpha, gen2=None, beta_threshold=None):
     """
     :param gen: sample generator
     :param model: NN model
@@ -69,6 +69,62 @@ def calc_beta(gen, model, alpha, gen2=None, beta_threshold=None):
     return fracs, beta, th_eta
 
 
+def calc_beta(gen, model, _alpha, gen2=None, threshold=0., swap_hypotheses=False):
+    """
+    :param gen: sample generator
+    :param model: NN model
+    :param alpha: maximal type I error
+    :param gen2: if gen2 is not None gen output is used for 0-hypothesis and gen2 for alternative
+    otherwise frac > 0 condition is used
+    :param swap_hypotheses swap hypotheses H0 and H1 hypotheses
+    :return: (frac, alpha) minimal fraction of source events in alternative (gen2) hypothesis and precise alpha or (1., 1.) if detection is impossible
+    """
+    data = [gen] if gen2 is None else [gen, gen2]
+    src = xi = frac = None
+    for i, g in enumerate(data):
+        save = g.return_frac
+        g.return_frac = True
+        for batch in range(len(g)):
+            maps, batch_frac = g.__getitem__(batch)
+            batch_xi = model.predict(maps).flatten()
+            if gen2 is None:
+                batch_src = batch_frac > threshold
+            else:
+                batch_src = np.full(len(batch_frac), i == 1)
+            if src is None:
+                src = batch_src
+                xi = batch_xi
+                frac = batch_frac
+            else:
+                src = np.concatenate((src, batch_src))
+                xi = np.concatenate((xi, batch_xi))
+                frac = np.concatenate((frac, batch_frac))
+        g.return_frac = save
+
+    if swap_hypotheses:
+        src = np.logical_not(src)
+
+    h0 = np.logical_not(src)  # is 0-hypothesis
+    h0_xi = xi[h0]
+    xi = xi[src]
+
+    mult = 1.
+    if np.mean(h0_xi) > np.mean(xi):  # below we assume <h0_xi>  <=  <xi>
+        mult = -1.
+        xi *= -1.
+        h0_xi *= -1.
+
+    alpha_thr = np.quantile(h0_xi, 1. - _alpha)
+
+    # sort by xi
+    xi = np.sort(xi)
+
+    thr_idx = np.where(xi >= alpha_thr)[0][0]
+    beta = thr_idx / len(xi)
+
+    return beta, mult * h0_xi, mult * xi
+
+
 def main():
     import argparse
     import train_healpix
@@ -132,7 +188,7 @@ def main():
 
         save_data = {}
         for alpha in args.alpha:
-            frac, beta, th_eta = calc_beta(gen, model, alpha, beta_threshold=args.beta_threshold)
+            frac, beta, th_eta = calc_beta_eta(gen, model, alpha, beta_threshold=args.beta_threshold)
             curves.append((l, alpha, frac, beta, th_eta))
             save_data['alpha'] = (frac, beta, th_eta)
             del model

@@ -28,8 +28,9 @@ runit(){
 
 	# Sample for comparison:
 	CMP="data/$GMF/sources/src_sample_"${SRC}"_D"${D}"_Emin56_N10000_R1_Nside32.txt.xz"
+	CMP_file=$(ls $CMP)
 
-	echo python beta.py ${CMP} \
+	echo python beta.py ${CMP_file} \
 	            --log_sample \
 				--Neecr ${Neecr} \
 				--n_samples ${Nsamples} \
@@ -38,12 +39,13 @@ runit(){
 				--models ${CNN_file}
 }
 
-for s in ${!sources[@]}; do
-    for GMF in "jf" "jf_pl" "jf_sol" "tf" "pt" ; do
+#for s in ${!sources[@]}; do
+for s in "NGC253" ; do
+    for GMF in "jf" ; do # "jf_pl" "jf_sol" "tf" "pt" ; do
         for N in 50 100 200 300 400 500; do
-            for CNN_PREFIX in "CenA_FornaxA_M87_N" "CenA_FornaxA_M82_M87_NGC253_N" ; do
-                runit $GMF $N $CNN_PREFIX $s
-            done
+            #for CNN_PREFIX in "CenA_FornaxA_M87_N" "CenA_FornaxA_M82_M87_NGC253_N" ; do
+            #    runit $GMF $N $CNN_PREFIX $s
+            #done
             CNN_PREFIX=${s}_N
             runit $GMF $N $CNN_PREFIX $s
         done
