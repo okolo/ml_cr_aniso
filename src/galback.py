@@ -162,7 +162,7 @@ elif GMF == "JF12sol":
             + ' kpc\n')
 
 elif GMF == "JF12Planck":
-    B = JF12FieldPlanck()
+    B = PlanckJF12bField()
 
     # Basename of an output file
     output_file = ('data/jf_pl/' + str(Nside) + '/' + nucleus
