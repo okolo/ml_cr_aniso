@@ -163,7 +163,14 @@ def main():
     add_arg('--seed', type=int, help='sample generator seed', default=train_healpix.test_seed)
     add_arg('--output', type=str, help='output file name (without extension)', default='beta')
     add_arg('--beta_threshold', type=float, help='threshold beta value for eta output', default=0.05)
-
+    add_arg('--sigmaLnE', type=float, help='deltaE/E energy resolution', default=0.2)
+    add_arg('--lgEbin', type=float, help='Log10 energy bin', default=0.05)
+    add_arg('--Emax', type=int, help='maximal binning energy in EeV', default=300)
+    add_arg('--EminBin', type=float, help='minimal binning energy in EeV', default=56)
+    add_arg('--EminSigmaDif', type=float,
+            help='minimal difference in between Emin and EminBin in terms of sigma used for param validation',
+            default=3)
+    add_arg('--disable_energy_binning', action='store_true', help='legacy mode without binning in energy')
 
     args = cline_parser.parse_args()
 
