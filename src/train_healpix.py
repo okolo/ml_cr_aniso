@@ -39,7 +39,7 @@ def get_source_data(source_id):
         raise ValueError('Unknown source!')
 
 
-def load_src_sample(args, suffix='', sources=None):
+def load_src_sample(args, suffix='', sources=None, mf=None):
     """
     Load data from src_sample files
     :param args: command line params (used if sources are given by name or not given at all)
@@ -52,6 +52,8 @@ def load_src_sample(args, suffix='', sources=None):
 
     if sources is None:
         sources = args.source_id.split(',')
+    if mf is None:
+        mf = args.mf
 
     for source_id in sources:
         if 'src_sample_' in source_id:
@@ -64,7 +66,7 @@ def load_src_sample(args, suffix='', sources=None):
                       + '_R' + str(args.source_vicinity_radius)
                       + '_Nside' + str(args.Nside) + suffix
                       + '.txt.xz')
-            infiles = args.data_dir + '/' + args.mf + '/sources/' + infiles
+            infiles = args.data_dir + '/' + mf + '/sources/' + infiles
         files = list(glob.glob(infiles))
         if len(files) == 0:
             raise ValueError(infiles + ' file(s) not found!')
@@ -124,7 +126,7 @@ def SampleGenerator(args, **kwargs):
 
 class SampleGeneratorSingleBin(keras.utils.Sequence):
     def __init__(self, args, deterministic=None, seed=0, n_samples=None, return_frac=False, suffix='*', sources=None,
-                 mixture=[], add_iso=None, sampler="auto", batch_size=None):
+                 mixture=[], add_iso=None, sampler="auto", batch_size=None, mf=None):
         self.n_bins_lgE = 1
         if sampler == "auto":
             self.sampler = f_sampler(args)
@@ -165,7 +167,7 @@ class SampleGeneratorSingleBin(keras.utils.Sequence):
         self.source_part = None
 
         if self.sampler is not None:  # not isotropy
-            data_list = list(load_src_sample(args, suffix=suffix, sources=sources))
+            data_list = list(load_src_sample(args, suffix=suffix, sources=sources, mf=mf))
             if len(mixture)>0:
                 assert len(mixture) == len(data_list), 'inconsistent mixture fractions'
                 self.source_part = np.array(mixture)/np.sum(mixture)
@@ -255,7 +257,7 @@ class SampleGeneratorSingleBin(keras.utils.Sequence):
 
 class SampleGeneratorWithEbins(keras.utils.Sequence):
     def __init__(self, args, deterministic=None, seed=0, n_samples=None, return_frac=False, suffix='*', sources=None,
-                 mixture=[], add_iso=None, sampler="auto", batch_size=None):
+                 mixture=[], add_iso=None, sampler="auto", batch_size=None, mf=None):
         min_lg_E = np.log10(args.EminBin)
         sigmaLgE = args.sigmaLnE / np.log(10.)
         eminSigmaDif = args.EminSigmaDif
@@ -265,7 +267,6 @@ class SampleGeneratorWithEbins(keras.utils.Sequence):
             validEminBin = 10**(np.log10(args.Emin) + eminSigmaDif * sigmaLgE)
             message = 'use Emin < {} or EminBin >{} or choose smaller sigmaLnE (difference must be larger then {} sigma)'.format(validEmin, validEminBin, eminSigmaDif)
             raise ValueError(message)
-
 
         lgEbin = args.lgEbin
         self.n_bins_lgE = int((np.log10(args.Emax)-min_lg_E)/lgEbin + 0.5)
@@ -277,6 +278,26 @@ class SampleGeneratorWithEbins(keras.utils.Sequence):
             x2 = (nb + 0.5) * lgEbin
             bin_diff_weights[nb] = norm.cdf(x2, scale=sigmaLgE) - norm.cdf(x1, scale=sigmaLgE)
         bin_diff_weights = np.hstack((np.flip(bin_diff_weights), bin_diff_weights[1:]))
+
+        iso_flux = np.loadtxt('data/iso_flux')
+        fE2 = np.sum(iso_flux[:, 1:], axis=1)
+        E = iso_flux[:, 0] / 1e18  # EeV
+        idx = np.where(E >= args.Emin)[0]
+        E = E[idx]
+        fE = fE2[idx] / E
+
+        binE = ((np.log10(E) - min_lg_E) / lgEbin).astype(np.int)
+        #  tp = np.arange(0, np.size(data[:, 0]))
+        nonz = np.where((binE >= -self.n_bins_lgE) & (binE < self.n_bins_lgE))[0]  # tp[data[:, 5] > 0]
+        binE = binE[nonz]
+        fE = fE[nonz]
+
+        weights_idx = n_weight_calc_bins - binE - 1
+        weights = [bin_diff_weights[idx:idx + self.n_bins_lgE] for idx in weights_idx]
+        probabilities = np.vstack(weights)  # increase n_weight_calc_bins if weights entries have different sizes
+        probabilities *= fE.reshape((-1, 1))
+        probabilities /= np.sum(probabilities)  # normalize to unit total
+        self.energy_probabilities = np.sum(probabilities, axis=0)
 
         if sampler == "auto":
             self.sampler = f_sampler(args)
@@ -314,11 +335,11 @@ class SampleGeneratorWithEbins(keras.utils.Sequence):
         self.Ncells = hp.nside2npix(args.Nside)
         self.healpix_src_cells = []
         self.probabilities = []
-        self.energy_probabilities = []
+
         self.nonz_number = []
         self.source_part = None
         if self.sampler is not None:  # not isotropy
-            data_list = list(load_src_sample(args, suffix=suffix, sources=sources))
+            data_list = list(load_src_sample(args, suffix=suffix, sources=sources, mf=mf))
             if len(mixture)>0:
                 assert len(mixture) == len(data_list), 'inconsistent mixture fractions'
                 self.source_part = np.array(mixture)/np.sum(mixture)
@@ -326,6 +347,7 @@ class SampleGeneratorWithEbins(keras.utils.Sequence):
             # 2. Find non-zero lines, i.e., those with Z>0:
 
             for data in data_list:
+                assert len(data) > 0, "invalid input map"
                 nonz = np.where(data[:, 5] > 0)[0]
                 data = data[nonz]
                 binE = ((np.log10(data[:, 6])-min_lg_E)/lgEbin).astype(np.int)
@@ -343,7 +365,6 @@ class SampleGeneratorWithEbins(keras.utils.Sequence):
                 weights = [bin_diff_weights[idx:idx + self.n_bins_lgE] for idx in weights_idx]
                 probabilities = np.vstack(weights)  # increase n_weight_calc_bins if weights entries have different sizes
                 probabilities /= np.sum(probabilities)  # normalize to unit total
-                self.energy_probabilities.append(np.sum(probabilities, axis=0))
                 self.probabilities.append(probabilities.ravel())
                 self.nonz_number.append(len(nonz))
 
@@ -389,32 +410,15 @@ class SampleGeneratorWithEbins(keras.utils.Sequence):
                         healpix_map[i, cell_idx, e_idx] += 1
 
             if Niso > 0:
-                # ensure same average energy spectrum is used as in anisotropic case
-                if self.source_part is not None:  # mixture of events from different sources in one sample
-                    sampled_src = np.random.choice(len(self.source_part ), Niso, p=self.source_part)
-                    counts = zip(*np.unique(sampled_src, return_counts=True))
-                else:  # samples, containing events from single source
-                    f_idx = 0
-                    n_files = len(self.healpix_src_cells)
-                    if n_files > 1:
-                        f_idx = np.random.randint(0, n_files)  # select random file
-                    counts = [(f_idx, Niso)]
+                lon_iso = np.random.uniform(-np.pi, np.pi, Niso)
+                lat_iso = np.arccos(np.random.uniform(-1, 1, Niso)) - np.pi / 2.
+                energy_bin_idxs = np.random.choice(len(self.energy_probabilities), Niso, replace=True, p=self.energy_probabilities)
+                # Cells "occupied" by the isotropic sample in the healpix grid
+                iso_cells = hp.ang2pix(self.Nside, np.rad2deg(lon_iso),
+                                       np.rad2deg(lat_iso), lonlat=True)
 
-                for file_idx, n_src in counts:
-                    p = self.energy_probabilities[file_idx]
-                    energy_bin_idxs = np.random.choice(len(p), n_src, replace=True, p=p)
-
-                    # A sample of events from the isotropic background
-                    # np.random.seed(iso_random_seed)
-                    lon_iso = np.random.uniform(-np.pi, np.pi, n_src)
-                    lat_iso = np.arccos(np.random.uniform(-1, 1, n_src)) - np.pi / 2.
-
-                    # Cells "occupied" by the isotropic sample in the healpix grid
-                    iso_cells = hp.ang2pix(self.Nside, np.rad2deg(lon_iso),
-                                           np.rad2deg(lat_iso), lonlat=True)
-
-                    for e_idx, cell_idx in zip(energy_bin_idxs, iso_cells):
-                        healpix_map[i, cell_idx, e_idx] += 1
+                for e_idx, cell_idx in zip(energy_bin_idxs, iso_cells):
+                    healpix_map[i, cell_idx, e_idx] += 1
 
             answers[i] = Nsrc / self.Neecr
 
@@ -430,9 +434,13 @@ def plot_learning_curves(history, save_file=None, show_fig=False):
 
     for i, m in enumerate(metrics):
         plt.subplot(len(metrics), 1, 1+i)
-        plt.plot(history.history['val_' + m], 'r')
+        labels = []
+        if 'val_' + m in history.history:
+            plt.plot(history.history['val_' + m], 'r')
+            labels.append('Test')
         plt.plot(history.history[m], 'g')
-        plt.legend(['Test', 'Train'], loc='upper right')
+        labels.append('Train')
+        plt.legend(labels, loc='upper right')
         plt.ylabel(m)
 
     if save_file:
@@ -444,7 +452,8 @@ def plot_learning_curves(history, save_file=None, show_fig=False):
     except Exception:
         pass
 
-def calc_detectable_frac(gen, model, args, gen2=None, swap_h0_and_h1=False):
+def calc_detectable_frac(gen, model, args, gen2=None, swap_h0_and_h1=False, verbose=0):
+
     """
     :param gen: sample generator
     :param model: NN model
@@ -453,104 +462,17 @@ def calc_detectable_frac(gen, model, args, gen2=None, swap_h0_and_h1=False):
     otherwise frac > 0 condition is used
     :return: (frac, alpha) minimal fraction of source events in alternative (gen2) hypothesis and precise alpha or (1., 1.) if detection is impossible
     """
+    from beta import calc_beta_eta
+
     if swap_h0_and_h1:
         _alpha = args.beta
         _beta = args.alpha
     else:
         _alpha = args.alpha
         _beta = args.beta
-    data = [gen] if gen2 is None else [gen, gen2]
-    src = xi = frac = None
-    for i, g in enumerate(data):
-        save = g.return_frac
-        g.return_frac = True
-        for batch in range(len(g)):
-            maps, batch_frac = g.__getitem__(batch)
-            batch_xi = model.predict(maps).flatten()
-            if gen2 is None:
-                batch_src = batch_frac > 0
-            else:
-                batch_src = np.full(len(batch_frac), i == 1)
-            if src is None:
-                src = batch_src
-                xi = batch_xi
-                frac = batch_frac
-            else:
-                src = np.concatenate((src, batch_src))
-                xi = np.concatenate((xi, batch_xi))
-                frac = np.concatenate((frac, batch_frac))
-        g.return_frac = save
 
-    h0 = np.logical_not(src)  # is 0-hypothesis
-    h0_xi = xi[h0]
-    fractions = frac[src]
-    xi = xi[src]
-
-    if np.mean(h0_xi) > np.mean(xi):  # below we assume <h0_xi>  <=  <xi>
-        xi *= -1.
-        h0_xi *= -1.
-
-    alpha_thr = np.quantile(h0_xi, 1. - _alpha)
-
-    # sort by xi
-    idx = np.argsort(xi)
-    fractions = fractions[idx]
-    xi = xi[idx]
-
-    thr_idx = np.where(xi >= alpha_thr)[0][0]
-
-    fracs = sorted(list(set(fractions)))
-
-    def beta(i_f):
-        idx = np.where(fractions >= fracs[i_f])[0]
-        # TODO: fix bug: >= is wrong (for correct implementation see beta.calc_beta_eta)
-
-        idx_left = np.where(idx < thr_idx)[0]
-        return len(idx_left) / len(idx)
-
-    def alpha(i_f):
-        thr = np.quantile(xi[fractions >= fracs[i_f]], _beta)
-        idx_right = np.where(h0_xi > thr)[0]
-        return len(idx_right) / len(h0_xi)
-
-    l = 0
-    r = len(fracs) - 1
-
-    beta_l = beta(l)
-    beta_r = beta(r)
-
-    if beta_r > _beta:
-        print('solution not found', file=stderr)
-        return 1., 1.
-
-    if beta_r == _beta:
-        l = r
-
-    if beta_l <= _beta:
-        print('all mixed samples satisfy criterion', file=stderr)
-        r = l
-
-    i = (l + r) // 2
-
-    while r > l + 2:
-        b = beta(i)
-        if b > _beta:
-            l = i
-        elif b < _beta:
-            r = i
-        else:
-            break
-        i = (l + r) // 2
-
-    if beta(i) > _beta:
-        i += 1
-
-    if swap_h0_and_h1:
-        type_I_error_P = beta(i)
-    else:
-        type_I_error_P = alpha(i)
-
-    return fracs[i], type_I_error_P
+    fracs, beta, th_eta = calc_beta_eta(gen, model, args.alpha, gen2=gen2, beta_threshold=args.beta, verbose=verbose)
+    return th_eta, args.alpha
 
 def main():
     cline_parser = argparse.ArgumentParser(description='Train network',
@@ -567,27 +489,31 @@ def main():
     # add_arg('--Nmixed_samples', type=int, help='Number of mixed samples (i.e., the sample size)', default=1000)
     add_arg('--source_id', type=str, help='source (CenA, NGC253, M82, M87 or FornaxA) or comma separated list of sources or "all"',
             default='CenA')
-    add_arg('--data_dir', type=str, help='data root directory (should contain jf/sources/ or pt/sources/)',
+    add_arg('--data_dir', type=str, help='data root directory (should contain [mf]/sources/)',
             default='data')
-    add_arg('--mf', type=str, help='Magnetic field model (jf or pt)', default='jf')
-    add_arg('--compare_mf', type=str, help='Magnetic field model to compare with (jf or pt)', default='')
+    add_arg('--mf', type=str, help='Magnetic field model used for training (jf | jf_sol | jf_pl | tf | pt)', default='jf')
+    add_arg('--validation_mf', type=str, help='Magnetic field model used for validation (jf | jf_sol | jf_pl | tf | pt)',
+            default='jf')
+    add_arg('--test_mf', type=str, help='Magnetic field model to use for final test (jf | jf_sol | jf_pl | tf | pt)', default='jf')
     add_arg('--Nside', type=int, help='healpix grid Nside parameter', default=32)
     add_arg('--Nini', type=int, help='Size of the initial sample of from-source events', default=10000)
     add_arg('--log_sample', action='store_true', help="sample f_src uniformly in log scale")
     add_arg('--f_src_max', type=float, help='maximal fraction of "from-source" EECRs [0,1]', default=1)
     add_arg('--f_src_min', type=float, help='minimal fraction of "from-source" EECRs [0,1]', default=0)
-    add_arg('--layers', type=str, help='comma-separated list of inner layer sizes', default='')
+    add_arg('--layers', type=str, help='comma-separated list of inner layer sizes', default='16,16')
     add_arg('--output_prefix', type=str, help='output model file path prefix', default='')
     add_arg('--batch_size', type=int, help='size of training batch', default=100)
-    add_arg('--n_epochs', type=int, help='number of training epochs', default=1000)
+    add_arg('--n_epochs', type=int, help='number of training epochs', default=20)
     add_arg('--show_fig', action='store_true', help="Show learning curves")
     add_arg('--n_early_stop', type=int, help='number of epochs to monitor for early stop', default=10)
     add_arg('--pretrained', type=str, help='pretrained network', default='')
     add_arg('--loss', type=str, help='NN loss', default='binary_crossentropy')
-    add_arg('--monitor', type=str, help='NN metrics: used for early stop val_loss/frac/frac_compare', default='frac')
-    add_arg('--n_samples', type=int, help='number of samples per training epoch', default=50000)
+    add_arg('--monitor', type=str, help='NN metrics: used for early stop val_loss/frac', default='frac')
+    add_arg('--n_samples', type=int, help='number of samples per training epoch', default=10000)
+    add_arg('--n_validation_samples', type=int, help='number of samples used for validation after each epoch', default=10000)
+    add_arg('--n_test_samples', type=int, help='number of samples used for final test', default=50000)
     add_arg('--nside_min', type=int, help='minimal Nside for convolution', default=1)
-    add_arg('--n_filters', type=int, help='number of filters for convolution', default=32)
+    add_arg('--n_filters', type=int, help='number of filters for convolution', default=76)
     add_arg('--source_vicinity_radius', type=str, help='source vicinity radius', default='1')
     add_arg('--threshold', type=float,
             help='source fraction threshold for binary classification', default=0.0)
@@ -601,6 +527,9 @@ def main():
     add_arg('--EminBin', type=float, help='minimal binning energy in EeV', default=56)
     add_arg('--EminSigmaDif', type=float, help='minimal difference in between Emin and EminBin in terms of sigma used for param validation', default=3)
     add_arg('--disable_energy_binning', action='store_true', help='legacy mode without binning in energy')
+    add_arg('--plot_learning_curves', action='store_true', help='make learning curve plots')
+    add_arg('--min_delta', type=float, help='minimal monitor difference used for early stop for loss monitor', default=1e-6)
+    add_arg('--evaluate_test_loss', action='store_true', help='evaluate loss and accuracy on test data (minimal fraction is always evaluated)')
 
 
     args = cline_parser.parse_args()
@@ -618,36 +547,18 @@ def main():
     args.loss = get_loss(args.loss)
 
     train_gen = SampleGenerator(args, seed=train_seed)
-    val_gen = SampleGenerator(args, deterministic=True, seed=val_seed, n_samples=max(1000, args.n_samples//10))
-    test_gen = [SampleGenerator(args, deterministic=True, seed=test_seed, n_samples=max(10000, args.n_samples))]
+    val_gen = SampleGenerator(args, deterministic=True, seed=val_seed, n_samples=args.n_validation_samples, mf=args.validation_mf)
+    test_gen = [SampleGenerator(args, deterministic=True, seed=test_seed, n_samples=args.n_test_samples)]
     if len(sources) > 1:
-        test_gen += [SampleGenerator(args, deterministic=True, seed=2 ** 26,
-                                     n_samples=max(10000, args.n_samples), sources=[s]) for s in sources]
+        test_gen += [SampleGenerator(args, deterministic=True, seed=test_seed,
+                                     n_samples=args.n_test_samples, sources=[s]) for s in sources]
 
-    frac_gen = test_gen[0]
-    frac_mf = args.mf
+    test_b_gen = [SampleGenerator(args, deterministic=True, seed=test_seed, n_samples=args.n_test_samples,
+                                      mf=args.test_mf)]
+    if len(sources) > 1:
+        test_b_gen += [SampleGenerator(args, deterministic=True, seed=test_seed, n_samples=args.n_test_samples,
+                                       sources=[s], mf=args.test_mf) for s in sources]
 
-    test_b_gen = None
-    if len(args.compare_mf)==0:
-        args.compare_mf = 'pt' if args.mf == 'jf' else 'jf'
-
-    mf = args.mf
-    args.mf = args.compare_mf
-    try:
-        test_b_gen = [SampleGenerator(args, deterministic=True, seed=2**26, n_samples=max(10000, args.n_samples))]
-        if len(sources) > 1:
-            test_b_gen += [SampleGenerator(args, deterministic=True, seed=2**26,
-                                         n_samples=max(10000, args.n_samples), sources=[s]) for s in sources]
-
-        if args.monitor == 'frac_compare':
-            frac_gen = test_b_gen[0]
-            frac_mf = args.compare_mf
-    except ValueError as ver:
-        print(args.compare_mf, 'field test will be skipped:', str(ver))
-        if args.monitor == 'frac_compare':
-            args.monitor == 'frac'
-
-    args.mf = mf
 
     def train_model(model, save_name, epochs=400, verbose=1, n_early_stop_epochs=30, batch_size=1024):
         for i in range(args.min_version, 100000):
@@ -665,39 +576,37 @@ def main():
         frac_and_alphas = []
 
         def frac_logging_callback(epoch, logs):
-            f_a = calc_detectable_frac(frac_gen, model, args)
+            f_a = calc_detectable_frac(val_gen, model, args)
             frac_and_alphas.append(f_a)
             print(epoch, f_a[0], f_a[1], file=frac_log)
             print('Detectable fraction:', f_a[0], '\talpha =', f_a[1])
             if args.monitor.startswith('frac'):
                 f_a_sorted = sorted(frac_and_alphas)
 
-                if len(frac_and_alphas) == 1 or f_a == f_a_sorted[0]:
+                if len(frac_and_alphas) == 1 or (f_a == f_a_sorted[0] and f_a_sorted[1] != f_a): # last condition added to avoid staying on plato
                     model.save_weights(weights_file, overwrite=True)
                 elif n_early_stop_epochs > 0 and len(frac_and_alphas) - frac_and_alphas.index(f_a_sorted[0]) > n_early_stop_epochs:
                     model.stop_training = True
                     print('Early stop on epoch', epoch)
 
-
-        callbacks = [keras.callbacks.LambdaCallback(on_epoch_end=frac_logging_callback)]
-        if not args.monitor.startswith('frac'):
-            callbacks.append(
-                keras.callbacks.ModelCheckpoint(weights_file, save_best_only=True, monitor=args.monitor,
-                                                save_weights_only=True)  # save best model
-            )
+        if args.monitor.startswith('frac'):
+            callbacks = [keras.callbacks.LambdaCallback(on_epoch_end=frac_logging_callback)]
+        else:
+            callbacks = [keras.callbacks.ModelCheckpoint(weights_file, save_best_only=True, monitor=args.monitor,
+                                                save_weights_only=True)]  # save best model
             if n_early_stop_epochs > 0:
                 callbacks.append(
-                    keras.callbacks.EarlyStopping(monitor=args.monitor, patience=n_early_stop_epochs, verbose=1)
+                    # this doesn't work for 'frac' monitor
+                    keras.callbacks.EarlyStopping(monitor=args.monitor, patience=n_early_stop_epochs, verbose=1, min_delta=args.min_delta)
                     # early stop
                 )
 
+        validation_data = None if args.monitor.startswith('frac') else val_gen
         t = time.time()
-
-        frac_gen.seed = val_seed  # make sure different samples are used in validation and test phase
         history = model.fit_generator(train_gen, epochs=epochs, verbose=verbose,
-                            validation_data=val_gen, callbacks=callbacks)
+                            validation_data=validation_data, callbacks=callbacks)
         t = time.time() - t
-        frac_gen.seed = test_seed  # make sure different samples are used in validation and test phase
+
         if n_early_stop_epochs > 0 and path.isfile(weights_file):
             model.load_weights(weights_file)  # load best weights
             remove(weights_file)
@@ -706,8 +615,13 @@ def main():
         model.save(save_path)
         print('Model saved in', save_path)
 
-        plot_learning_curves(history, save_file=save_path[:-3] + '_train.png', show_fig=args.show_fig)
-        score = model.evaluate_generator(test_gen[0], verbose=0)
+        if args.plot_learning_curves:
+            plot_learning_curves(history, save_file=save_path[:-3] + '_train.png', show_fig=args.show_fig)
+
+        if args.evaluate_test_loss:
+            score = model.evaluate_generator(test_gen[0], verbose=0)
+        else:
+            score = []
 
         with open(save_path + '.args', mode='w') as args_out:
             from sys import argv
@@ -723,12 +637,12 @@ def main():
 
             print('training_time_sec', t, file=out)
 
-            frac_and_alphas.sort()
-            f, a = frac_and_alphas[0]
-            for file in [out, stdout]:
-
-                print('best_val_frac_' + frac_mf, f, file=file)
-                print('best_val_alpha_' + frac_mf, a, file=file)
+            if len(frac_and_alphas) > 0:
+                frac_and_alphas.sort()
+                f, a = frac_and_alphas[0]
+                for file in [out, stdout]:
+                    print('best_val_frac_' + args.validation_mf, f, file=file)
+                    print('best_val_alpha_' + args.validation_mf, a, file=file)
 
             for gen in test_gen:
                 sources = gen.sources
@@ -744,11 +658,10 @@ def main():
                     print('alpha_' + src_name + '_' + args.mf, test_alpha, file=file)
                 b_gen = [b for b in test_b_gen if b.sources == gen.sources]
                 if len(b_gen) == 1:
-                    # print(args.compare_mf, 'field..')
                     test_frac, test_alpha = calc_detectable_frac(b_gen[0], model, args)
                     for file in [out, stdout]:
-                        print('frac_' + src_name + '_' + args.compare_mf, test_frac, file=file)
-                        print('alpha_' + src_name + '_' + args.compare_mf, test_alpha, file=file)
+                        print('frac_' + src_name + '_' + args.test_mf, test_frac, file=file)
+                        print('alpha_' + src_name + '_' + args.test_mf, test_alpha, file=file)
 
 
 
