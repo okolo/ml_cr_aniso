@@ -1,6 +1,7 @@
 import numpy as np
+from sys import stderr
 
-def calc_beta_eta(gen, model, alpha, gen2=None, beta_threshold=None):
+def calc_beta_eta(gen, model, alpha, gen2=None, beta_threshold=None, verbose=0):
     """
     :param gen: sample generator
     :param model: NN model
@@ -8,14 +9,20 @@ def calc_beta_eta(gen, model, alpha, gen2=None, beta_threshold=None):
     :param gen2: if gen2 is not None gen output is used for 0-hypothesis and gen2 for alternative
     otherwise frac > 0 condition is used
     :param beta_threshold: threshold beta value for which minimal fraction is calculated
-    :return: tuple of arrays (frac, beta) beta as function of fraction of source events in alternative (gen2) hypothesis
+    :param verbose progress report
+    :return: (frac, beta, th_eta) frac and beta define beta as function of fraction of source events
+    in alternative (gen2) hypothesis, th_eta - minimal fraction calculated for beta_threshold
     """
     data = [gen] if gen2 is None else [gen, gen2]
     src = xi = frac = None
     for i, g in enumerate(data):
         save = g.return_frac
         g.return_frac = True
+        if verbose:
+            print()
         for batch in range(len(g)):
+            if verbose:
+                print('\r{}/{}'.format(batch,len(g)), file=stderr)
             maps, batch_frac = g.__getitem__(batch)
             batch_xi = model.predict(maps).flatten()
             if gen2 is None:
@@ -30,6 +37,7 @@ def calc_beta_eta(gen, model, alpha, gen2=None, beta_threshold=None):
                 src = np.concatenate((src, batch_src))
                 xi = np.concatenate((xi, batch_xi))
                 frac = np.concatenate((frac, batch_frac))
+
         g.return_frac = save
 
     h0 = np.logical_not(src)  # is 0-hypothesis
@@ -76,6 +84,7 @@ def calc_beta(gen, model, _alpha, gen2=None, threshold=0., swap_hypotheses=False
     :param alpha: maximal type I error
     :param gen2: if gen2 is not None gen output is used for 0-hypothesis and gen2 for alternative
     otherwise frac > 0 condition is used
+    :param fraction threshold for hypothesis boundary
     :param swap_hypotheses swap hypotheses H0 and H1 hypotheses
     :return: (frac, alpha) minimal fraction of source events in alternative (gen2) hypothesis and precise alpha or (1., 1.) if detection is impossible
     """
