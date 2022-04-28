@@ -180,6 +180,7 @@ def main():
             help='minimal difference in between Emin and EminBin in terms of sigma used for param validation',
             default=3)
     add_arg('--disable_energy_binning', action='store_true', help='legacy mode without binning in energy')
+    add_arg('--exposure', type=str, help='exposure: uniform/TA', default='uniform')
 
     args = cline_parser.parse_args()
 

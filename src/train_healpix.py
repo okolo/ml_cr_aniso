@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import argparse
 import losses
@@ -118,15 +120,19 @@ def f_sampler(args, n_samples=-1, exclude_iso=False):  # if < 0, sample forever
         n += 1
 
 def SampleGenerator(args, **kwargs):
+    from exposure import create_exposure
+    exposure = create_exposure(args)
     if args.disable_energy_binning:
-        return SampleGeneratorSingleBin(args, **kwargs)
+        return SampleGeneratorSingleBin(args, exposure=exposure, **kwargs)
     else:
-        return SampleGeneratorWithEbins(args, **kwargs)
+        return SampleGeneratorWithEbins(args, exposure=exposure, **kwargs)
 
 
 class SampleGeneratorSingleBin(keras.utils.Sequence):
     def __init__(self, args, deterministic=None, seed=0, n_samples=None, return_frac=False, suffix='*', sources=None,
-                 mixture=[], add_iso=None, sampler="auto", batch_size=None, mf=None):
+                 mixture=[], add_iso=None, sampler="auto", batch_size=None, mf=None, exposure=None):
+        self.point_exposure = []
+        self.exposure = exposure
         self.n_bins_lgE = 1
         if sampler == "auto":
             self.sampler = f_sampler(args)
@@ -163,25 +169,38 @@ class SampleGeneratorSingleBin(keras.utils.Sequence):
         self.Neecr = args.Neecr
         self.Ncells = hp.nside2npix(args.Nside)
         self.healpix_src_cells = []
-        self.nonz_number = []
-        self.source_part = None
+        self.source_weights = None
 
         if self.sampler is not None:  # not isotropy
             data_list = list(load_src_sample(args, suffix=suffix, sources=sources, mf=mf))
             if len(mixture)>0:
                 assert len(mixture) == len(data_list), 'inconsistent mixture fractions'
-                self.source_part = np.array(mixture)/np.sum(mixture)
+                self.source_weights = np.array(mixture) / np.sum(mixture)
 
             # 2. Find non-zero lines, i.e., those with Z>0:
 
             for data in data_list:
-                tp = np.arange(0, np.size(data[:, 0]))
-                nonz = tp[data[:, 5] > 0]
-                assert len(nonz) >= args.Neecr
-                self.nonz_number.append(len(nonz))
-                # These are numbers of cells on the healpix grid occupied by the
-                # nuclei in the infile
-                self.healpix_src_cells.append(data[nonz, 7].astype(int))
+                # Filtering invalid entries
+                data = data[data[:, 5] > 0]
+                assert len(data) >= args.Neecr
+
+                # saving numbers of cells on the healpix grid occupied by the nuclei
+                self.healpix_src_cells.append(data[:, 7].astype(int))
+                if exposure is not None:
+                    # TODO: take into account exposure energy dependence for iso component
+                    assert not exposure.energy_dependent, "exposure energy dependece not supported in unbinned mode"
+                    l_deg = data[:, 3]
+                    b_deg = data[:, 2]
+                    energy = data[:, 6]
+                    exposure = exposure.gal_exposure(l_deg, b_deg, energy)
+                    tot_exposure = np.sum(exposure)
+                    if tot_exposure == 0:
+                        raise ValueError('exposure in the direction of source is equal to 0')
+                    n_non_zero_points = np.sum(exposure > 0)
+                    if n_non_zero_points < self.Neecr:
+                        logging.warning(f'number of nonzero exposure points is {n_non_zero_points}')
+                    exposure /= tot_exposure
+                    self.point_exposure.append(exposure)
 
         self.Nside = args.Nside
         self.threshold = args.threshold
@@ -203,21 +222,23 @@ class SampleGeneratorSingleBin(keras.utils.Sequence):
                 Nsrc, Niso = self.sampler.__next__()
 
             if Nsrc > 0:
-                if self.source_part is not None:  # mixture of events from different sources in one sample
-                    sampled_src = np.random.choice(len(self.source_part ), Nsrc, p=self.source_part)
+                if self.source_weights is not None:  # mixture of events from different sources in one sample
+                    sampled_src = np.random.choice(len(self.source_weights), Nsrc, p=self.source_weights)
                     counts = zip(*np.unique(sampled_src, return_counts=True))
                 else:  # samples, containing events from single source
                     f_idx = 0
-                    if len(self.nonz_number) > 1:
-                        f_idx = np.random.randint(0, len(self.nonz_number))  # select random file
+                    if len(self.healpix_src_cells) > 1:
+                        f_idx = np.random.randint(0, len(self.healpix_src_cells))  # select random file
                     counts = [(f_idx, Nsrc)]
                 for file_idx, n_src in counts:
-
-                    nonz_number = self.nonz_number[file_idx]
                     healpix_src_cells = self.healpix_src_cells[file_idx]
+                    nonz_number = len(healpix_src_cells)
 
                     # Create a random sample of from-source events:
-                    src_sample = np.random.choice(nonz_number, n_src, replace=False)
+                    if self.point_exposure:
+                        src_sample = np.random.choice(nonz_number, n_src, p=self.point_exposure[file_idx], replace=True)
+                    else:
+                        src_sample = np.random.choice(nonz_number, n_src, replace=False)
 
                     # Cells of the healpix grid "occupied" by the from-source sample
                     src_cells = healpix_src_cells[src_sample]
@@ -233,10 +254,20 @@ class SampleGeneratorSingleBin(keras.utils.Sequence):
                     healpix_map[i, cells[0]] += cells[1]
 
             if Niso > 0:
-                # A sample of events from the isotropic background
-                # np.random.seed(iso_random_seed)
-                lon_iso = np.random.uniform(-np.pi, np.pi, Niso)
-                lat_iso = np.arccos(np.random.uniform(-1, 1, Niso)) - np.pi / 2.
+                if self.exposure is None:
+                    # A sample of events from the isotropic background
+                    # np.random.seed(iso_random_seed)
+                    lon_iso = np.random.uniform(-np.pi, np.pi, Niso)
+                    lat_iso = np.arccos(np.random.uniform(-1, 1, Niso)) - np.pi / 2.
+                else:
+                    n_iso_points = 10 * (Niso + 1)
+                    lon_iso = np.random.uniform(-np.pi, np.pi, n_iso_points)
+                    lat_iso = np.arccos(np.random.uniform(-1, 1, n_iso_points)) - np.pi / 2.
+                    p = self.exposure.gal_exposure(lon_iso*180/np.pi, lat_iso*180/np.pi)
+                    p /= np.sum(p)
+                    idxs = np.random.choice(n_iso_points, Niso, p=p, replace=True)
+                    lon_iso = lon_iso[idxs]
+                    lat_iso = lat_iso[idxs]
 
                 # Cells "occupied" by the isotropic sample in the healpix grid
                 iso_cells = hp.ang2pix(self.Nside, np.rad2deg(lon_iso),
@@ -257,7 +288,10 @@ class SampleGeneratorSingleBin(keras.utils.Sequence):
 
 class SampleGeneratorWithEbins(keras.utils.Sequence):
     def __init__(self, args, deterministic=None, seed=0, n_samples=None, return_frac=False, suffix='*', sources=None,
-                 mixture=[], add_iso=None, sampler="auto", batch_size=None, mf=None):
+                 mixture=[], add_iso=None, sampler="auto", batch_size=None, mf=None, exposure=None):
+        self.point_exposure = []
+        self.exposure = exposure
+        assert exposure is None, "Not implemented yet"
         min_lg_E = np.log10(args.EminBin)
         sigmaLgE = args.sigmaLnE / np.log(10.)
         eminSigmaDif = args.EminSigmaDif
@@ -265,7 +299,7 @@ class SampleGeneratorWithEbins(keras.utils.Sequence):
         if min_lg_E - np.log10(args.Emin) < eminSigmaDif * sigmaLgE:
             validEmin = 10**(min_lg_E - eminSigmaDif * sigmaLgE)
             validEminBin = 10**(np.log10(args.Emin) + eminSigmaDif * sigmaLgE)
-            message = 'use Emin < {} or EminBin >{} or choose smaller sigmaLnE (difference must be larger then {} sigma)'.format(validEmin, validEminBin, eminSigmaDif)
+            message = f'use Emin < {validEmin} or EminBin >{validEminBin} or choose smaller sigmaLnE (difference must be larger then {eminSigmaDif} sigma)'
             raise ValueError(message)
 
         lgEbin = args.lgEbin
@@ -336,37 +370,30 @@ class SampleGeneratorWithEbins(keras.utils.Sequence):
         self.healpix_src_cells = []
         self.probabilities = []
 
-        self.nonz_number = []
-        self.source_part = None
+        self.source_weights = None
         if self.sampler is not None:  # not isotropy
             data_list = list(load_src_sample(args, suffix=suffix, sources=sources, mf=mf))
             if len(mixture)>0:
                 assert len(mixture) == len(data_list), 'inconsistent mixture fractions'
-                self.source_part = np.array(mixture)/np.sum(mixture)
+                self.source_weights = np.array(mixture) / np.sum(mixture)
 
             # 2. Find non-zero lines, i.e., those with Z>0:
 
             for data in data_list:
                 assert len(data) > 0, "invalid input map"
-                nonz = np.where(data[:, 5] > 0)[0]
-                data = data[nonz]
+                data = data[data[:, 5] > 0]
                 binE = ((np.log10(data[:, 6])-min_lg_E)/lgEbin).astype(np.int)
-                #  tp = np.arange(0, np.size(data[:, 0]))
                 nonz = np.where((binE >= -self.n_bins_lgE) & (binE < self.n_bins_lgE))[0]  # tp[data[:, 5] > 0]
                 assert len(nonz) >= args.Neecr
-
-                # These are numbers of cells on the healpix grid occupied by the
-                # nuclei in the infile
-
-                healpix_src_cells = data[nonz, 7].astype(int)
-                self.healpix_src_cells.append(healpix_src_cells)
+                data = data[nonz]
                 binE = binE[nonz]
+                healpix_src_cells = data[:, 7].astype(int)
+                self.healpix_src_cells.append(healpix_src_cells)
                 weights_idx = n_weight_calc_bins-binE-1
                 weights = [bin_diff_weights[idx:idx + self.n_bins_lgE] for idx in weights_idx]
                 probabilities = np.vstack(weights)  # increase n_weight_calc_bins if weights entries have different sizes
                 probabilities /= np.sum(probabilities)  # normalize to unit total
                 self.probabilities.append(probabilities.ravel())
-                self.nonz_number.append(len(nonz))
 
         self.Nside = args.Nside
         self.threshold = args.threshold
@@ -388,8 +415,8 @@ class SampleGeneratorWithEbins(keras.utils.Sequence):
                 Nsrc, Niso = self.sampler.__next__()
 
             if Nsrc > 0:
-                if self.source_part is not None:  # mixture of events from different sources in one sample
-                    sampled_src = np.random.choice(len(self.source_part ), Nsrc, p=self.source_part)
+                if self.source_weights is not None:  # mixture of events from different sources in one sample
+                    sampled_src = np.random.choice(len(self.source_weights), Nsrc, p=self.source_weights)
                     counts = zip(*np.unique(sampled_src, return_counts=True))
                 else:  # samples, containing events from single source
                     f_idx = 0
@@ -530,6 +557,7 @@ def main():
     add_arg('--plot_learning_curves', action='store_true', help='make learning curve plots')
     add_arg('--min_delta', type=float, help='minimal monitor difference used for early stop for loss monitor', default=1e-6)
     add_arg('--evaluate_test_loss', action='store_true', help='evaluate loss and accuracy on test data (minimal fraction is always evaluated)')
+    add_arg('--exposure', type=str, help='exposure: uniform/TA', default='uniform')
 
 
     args = cline_parser.parse_args()
@@ -672,7 +700,11 @@ def main():
         save_name = args.pretrained[:-3]
     else:
         n_side_min = min(args.Nside, args.nside_min)
-        prefix = '_'.join(sorted(args.source_id.split(',')))
+        if args.exposure == 'uniform':
+            prefix = ''
+        else:
+            prefix = args.exposure + '_'
+        prefix += '_'.join(sorted(args.source_id.split(',')))
         save_name = args.output_prefix + '{}_N{}_B{}_Ns{}-{}_F{}'.format(prefix, args.Neecr, args.mf, args.Nside,
                                                                      n_side_min, args.n_filters)
         if len(inner_layers) > 0:
@@ -681,6 +713,7 @@ def main():
             save_name += '_th' + str(args.threshold)
         if not args.disable_energy_binning:
             save_name += '_sig{:.0f}_b{:.2f}'.format(100*args.sigmaLnE, args.lgEbin)
+
 
     train_model(model, save_name, batch_size=args.batch_size, epochs=args.n_epochs,
                 n_early_stop_epochs=args.n_early_stop)
