@@ -35,6 +35,7 @@ add_arg('--data_dir', type=str, help='data root directory (should contain jf/sou
 add_arg('--threshold', type=float,
             help='source fraction threshold for binary classification', default=0.0)
 add_arg('--seed', type=int, help='sample generator seed', default=train_healpix.test_seed)
+add_arg('--disable_energy_binning', action='store_true', help='legacy mode without binning in energy')
 add_arg('--exposure', type=str, help='exposure: uniform/TA', default='uniform')
 
 args = cline_parser.parse_args()
