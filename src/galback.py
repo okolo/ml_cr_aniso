@@ -12,6 +12,7 @@ import os
 #import datetime
 from crpropa import *
 import numpy as np
+import healpy
 
 # _____________________________________________________________________
 # All other parameters are set below. Fix them as needed.
@@ -206,10 +207,6 @@ if GMF == "JF12ST":
             + '_{:03d}'.format(E)
             + 'EeV.txt')
 
-# Name of a 2-column ASCII file with colatitude and longitude
-# of the observed particle
-input_file  = 'healpy_coordinates_nside' + str(Nside) + '_rad.txt.gz'
-
 # Header for output_file
 output_header = (' PID = ' + str(PID) + ' (' + nucleus
         + '), E = ' + str(E) + ' EeV\n'
@@ -231,6 +228,9 @@ if os.path.isfile(output_file+'.xz'):
 with open(output_file,'w') as diary:
     diary.write(output_header)
 
+# Just a simple header for on-screen output
+print('\n'+ output_header)
+
 # _____________________________________________________________________
 # Backtracking
 
@@ -240,24 +240,12 @@ energy = E * EeV
 # Position of the observer
 position = Vector3d(-8.5, 0, 0) * kpc
 
-# Load initial data. No check of the validity of the data is performed
-try:
-    initial_coordinates = np.loadtxt('data/' + input_file)
-except IOError:
-    # Check if input_file exists, exit if not
-    print('\n-------> ' + input_file + ' not found!\n')
-    sys.exit()
-else:
-    initial_file_size = np.shape(initial_coordinates)
-    # A strange trick to overcome an error when shape=(2,0)
-    # in case of just one point listed in input_file
-    if initial_file_size==(2,):
-        initial_points_number = 1
-    else:
-        initial_points_number = initial_file_size[0]
-
-# Just a simple header for on-screen output
-print('\n'+ output_header)
+# In original version a 2-column ASCII file with colatitude and longitude was used
+# of the observed particle
+# input_file  = 'healpy_coordinates_nside' + str(Nside) + '_rad.txt.gz'
+initial_points_number = 12*Nside*Nside  # number of points in healpix grid with given Nside
+initial_coordinates = np.vstack(
+        healpy.pixelfunc.pix2ang(Nside, np.arange(initial_points_number), nest=False, lonlat=False)).transpose()
 
 # I do not see how one writes an output file line by line yet
 # Thus let us create an array that will be saved then
@@ -265,13 +253,8 @@ backtracking_results = np.empty(shape=(initial_points_number,5))
 
 # The main cycle over all points in input_file
 for i in np.arange(initial_points_number):
-
-    if initial_file_size==(2,):
-        lat_ini = initial_coordinates[0]
-        lon_ini = initial_coordinates[1]
-    else:
-        lat_ini = initial_coordinates[i,0]
-        lon_ini = initial_coordinates[i,1]
+    lat_ini = initial_coordinates[i,0]
+    lon_ini = initial_coordinates[i,1]
 
     if lon_ini>np.pi:
         lon_ini = - np.pi + np.mod(lon_ini,np.pi)
