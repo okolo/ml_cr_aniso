@@ -192,15 +192,15 @@ class SampleGeneratorSingleBin(keras.utils.Sequence):
                     l_deg = data[:, 3]
                     b_deg = data[:, 2]
                     energy = data[:, 6]
-                    exposure = exposure.gal_exposure(l_deg, b_deg, energy)
-                    tot_exposure = np.sum(exposure)
+                    points_exposure = exposure.gal_exposure(l_deg, b_deg, energy)
+                    tot_exposure = np.sum(points_exposure)
                     if tot_exposure == 0:
                         raise ValueError('exposure in the direction of source is equal to 0')
-                    n_non_zero_points = np.sum(exposure > 0)
+                    n_non_zero_points = np.sum(points_exposure > 0)
                     if n_non_zero_points < self.Neecr:
                         logging.warning(f'number of nonzero exposure points is {n_non_zero_points}')
-                    exposure /= tot_exposure
-                    self.point_exposure.append(exposure)
+                    points_exposure /= tot_exposure
+                    self.point_exposure.append(points_exposure)
 
         self.Nside = args.Nside
         self.threshold = args.threshold
