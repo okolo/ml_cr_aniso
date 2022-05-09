@@ -1,5 +1,5 @@
 import argparse
-import train_healpix
+from train_healpix import test_seed
 
 cline_parser = argparse.ArgumentParser(description='Calculate minimal detectable fraction',
                                        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -12,6 +12,7 @@ def add_arg(*pargs, **kwargs):
 add_arg('--f_src', type=float, help='fraction of "from-source" EECRs [0,1] or -1 for random', default=-1)
 add_arg('--Neecr', type=int, help='Total number of EECRs in each sample', default=500)
 add_arg('--Emin', type=int, help='Emin in EeV for which the input sample was generated', default=56)
+add_arg('--EminData', type=float, help='minimal data energy in EeV', default=56)
 # add_arg('--source_id', type=str,
 #         help='source (CenA, NGC253, M82, M87 or FornaxA) or comma separated list of sources or "all"',
 #         default='CenA')
@@ -34,21 +35,29 @@ add_arg('--data_dir', type=str, help='data root directory (should contain jf/sou
             default='data')
 add_arg('--threshold', type=float,
             help='source fraction threshold for binary classification', default=0.0)
-add_arg('--seed', type=int, help='sample generator seed', default=train_healpix.test_seed)
-add_arg('--disable_energy_binning', action='store_true', help='legacy mode without binning in energy')
+add_arg('--sigmaLnE', type=float, help='deltaE/E energy resolution', default=0.2)
+add_arg('--seed', type=int, help='sample generator seed', default=test_seed)
+add_arg('--exclude_energy', action='store_true', help='legacy mode without energy as extra observable')
 add_arg('--exposure', type=str, help='exposure: uniform/TA', default='uniform')
 
 args = cline_parser.parse_args()
-
 if len(args.fractions) > 0:
     assert len(args.fractions) == len(args.sources) and len(args.sources) > 1
 
-gen = train_healpix.SampleGenerator(
-    args, deterministic=True, sources=args.sources, suffix=args.suffix, seed=args.seed, mixture=args.fractions
-)
+try:
+    import train_healpix
+    model = train_healpix.create_model(12*args.Nside*args.Nside, pretrained=args.model)
+    Generator = train_healpix.SampleGenerator
+except:
+    import train_gcnn
+    model = train_gcnn.create_model(args.Neecr, pretrained=args.model)
+    Generator = train_gcnn.SampleGenerator
 
-model = train_healpix.create_model(gen.Ncells, pretrained=args.model)
-frac, alpha = train_healpix.calc_detectable_frac(gen, model, args)
+gen = Generator(
+        args, deterministic=True, sources=args.sources, suffix=args.suffix, seed=args.seed, mixture=args.fractions)
+
+from beta import calc_detectable_frac
+frac, alpha = calc_detectable_frac(gen, model, args)
 print(frac, alpha)
 
 out_file = args.model + "_cmp.txt"

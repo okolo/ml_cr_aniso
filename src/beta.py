@@ -179,7 +179,7 @@ def main():
     add_arg('--EminSigmaDif', type=float,
             help='minimal difference in between Emin and EminBin in terms of sigma used for param validation',
             default=3)
-    add_arg('--disable_energy_binning', action='store_true', help='legacy mode without binning in energy')
+    add_arg('--exclude_energy', action='store_true', help='legacy mode without binning in energy')
     add_arg('--exposure', type=str, help='exposure: uniform/TA', default='uniform')
 
     args = cline_parser.parse_args()
@@ -239,6 +239,28 @@ def main():
 
     plt.legend(loc='lower right')
     plt.savefig(args.output + '.pdf')
+
+
+def calc_detectable_frac(gen, model, args, gen2=None, swap_h0_and_h1=False, verbose=0):
+
+    """
+    :param gen: sample generator
+    :param model: NN model
+    :param args: parameters object (should contain alpha and beta attributes)
+    :param gen2: if gen2 is not None gen output is used for 0-hypothesis and gen2 for alternative
+    otherwise frac > 0 condition is used
+    :return: (frac, alpha) minimal fraction of source events in alternative (gen2) hypothesis and precise alpha or (1., 1.) if detection is impossible
+    """
+
+    if swap_h0_and_h1:
+        _alpha = args.beta
+        _beta = args.alpha
+    else:
+        _alpha = args.alpha
+        _beta = args.beta
+
+    fracs, beta, th_eta = calc_beta_eta(gen, model, args.alpha, gen2=gen2, beta_threshold=args.beta, verbose=verbose)
+    return th_eta, args.alpha
 
 
 if __name__ == '__main__':
