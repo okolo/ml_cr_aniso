@@ -65,26 +65,7 @@ gen = Generator(
         args, deterministic=test_batches, sources=args.sources, suffix=args.suffix, seed=args.seed, mixture=args.fractions)
 
 from beta import calc_detectable_frac
-
-frac_search_range = np.sqrt(args.Neecr)
-
-for i in range(args.n_iterations):
-    print(f'{args.f_src_min} <= frac <= {args.f_src_max}')
-    frac, alpha = calc_detectable_frac(gen, model, args)
-    print(f'iteration {i+1} of {args.n_iterations}: frac={frac}, alpha={alpha}')
-    if frac == 1:
-        break
-
-    if frac - args.f_src_min <= 1/args.Neecr and args.f_src_max - frac <= 1/args.Neecr:
-        break
-
-    f_src_min_boundary = (args.Neecr * frac - 1) / args.Neecr
-    f_src_max_boundary = min(1, (args.Neecr * frac + 1) / args.Neecr)
-    args.f_src_min = min(f_src_min_boundary, frac / frac_search_range)
-    args.f_src_max = max(f_src_max_boundary, frac * frac_search_range)
-
-    frac_search_range = np.sqrt(frac_search_range)
-    gen.sampler = f_sampler(args)
+frac, alpha = calc_detectable_frac(gen, model, args, n_iterations=args.n_iterations)
 
 out_file = args.model + "_cmp.txt"
 with open(out_file, "a") as d:

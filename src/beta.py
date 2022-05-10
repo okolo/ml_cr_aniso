@@ -1,5 +1,6 @@
 import numpy as np
 from sys import stderr
+from train import f_sampler
 
 def calc_beta_eta(gen, model, alpha, gen2=None, beta_threshold=None, verbose=0):
     """
@@ -241,7 +242,7 @@ def main():
     plt.savefig(args.output + '.pdf')
 
 
-def calc_detectable_frac(gen, model, args, gen2=None, swap_h0_and_h1=False, verbose=0):
+def calc_detectable_frac(gen, model, args, gen2=None, swap_h0_and_h1=False, verbose=0, n_iterations=1):
 
     """
     :param gen: sample generator
@@ -249,6 +250,7 @@ def calc_detectable_frac(gen, model, args, gen2=None, swap_h0_and_h1=False, verb
     :param args: parameters object (should contain alpha and beta attributes)
     :param gen2: if gen2 is not None gen output is used for 0-hypothesis and gen2 for alternative
     otherwise frac > 0 condition is used
+    :param n_iterations (default 1) increase number of iterations for more precise result
     :return: (frac, alpha) minimal fraction of source events in alternative (gen2) hypothesis and precise alpha or (1., 1.) if detection is impossible
     """
 
@@ -259,8 +261,36 @@ def calc_detectable_frac(gen, model, args, gen2=None, swap_h0_and_h1=False, verb
         _alpha = args.alpha
         _beta = args.beta
 
-    fracs, beta, th_eta = calc_beta_eta(gen, model, args.alpha, gen2=gen2, beta_threshold=args.beta, verbose=verbose)
-    return th_eta, args.alpha
+    frac_search_range = 4
+
+    f_src_min = args.f_src_min
+    f_src_max = args.f_src_max
+    add_iso = gen.add_iso
+    try:
+        for i in range(n_iterations):
+            if verbose > 0:
+                print(f'{args.f_src_min} <= frac <= {args.f_src_max}')
+            _, _, th_eta = calc_beta_eta(gen, model, _alpha, gen2=gen2, beta_threshold=_beta, verbose=verbose)
+            if verbose > 0:
+                print(f'iteration {i + 1} of {args.n_iterations}: th_eta={th_eta}, alpha={_alpha}')
+            if th_eta == 1:
+                break
+            if th_eta - args.f_src_min <= 1 / args.Neecr and args.f_src_max - th_eta <= 1 / args.Neecr:
+                break
+            f_src_min_boundary = max(0, (args.Neecr * th_eta - 1) / args.Neecr)
+            f_src_max_boundary = min(1, (args.Neecr * th_eta + 1) / args.Neecr)
+            args.f_src_min = min(f_src_min_boundary, th_eta / frac_search_range)
+            args.f_src_max = max(f_src_max_boundary, min(th_eta * frac_search_range, 1))
+
+            frac_search_range = np.sqrt(frac_search_range)
+            gen.sampler = f_sampler(args)
+            gen.add_iso = (args.f_src_min > 0)
+    finally:
+        args.f_src_min = f_src_min
+        args.f_src_max = f_src_max
+        gen.add_iso = add_iso
+
+    return th_eta, _alpha
 
 
 if __name__ == '__main__':
