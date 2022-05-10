@@ -45,7 +45,7 @@ def calc_beta_eta(gen, model, alpha, gen2=None, beta_threshold=None, verbose=0):
     fractions = frac[src]
     xi = xi[src]
 
-    if np.mean(h0_xi) > np.mean(xi):  # below we assume <h0_xi>  <=  <xi>
+    if np.median(h0_xi) > np.median(xi):  # below we assume <h0_xi>  <=  <xi>
         xi *= -1.
         h0_xi *= -1.
 
@@ -56,7 +56,7 @@ def calc_beta_eta(gen, model, alpha, gen2=None, beta_threshold=None, verbose=0):
     fractions = fractions[idx]
     xi = xi[idx]
 
-    thr_idx = np.where(xi >= alpha_thr)[0][0]
+    thr_idx = np.where(xi > alpha_thr)[0][0]
 
     fracs = np.array(sorted(list(set(fractions))))
 
@@ -64,7 +64,7 @@ def calc_beta_eta(gen, model, alpha, gen2=None, beta_threshold=None, verbose=0):
 
     for i_f, f in enumerate(fracs):
         idx = np.where(fractions == fracs[i_f])[0]
-        idx_left = np.where(idx < thr_idx)[0]
+        idx_left = np.where(idx <= thr_idx)[0]
         beta[i_f] = len(idx_left)/len(idx)
 
     th_eta = 1.
