@@ -108,6 +108,14 @@ class EdgeConv(lay.Layer):
 
 
     def kernel_func(self, data):
+        # support for prelu activation
+        inline_activation = self.kernel_activation
+        layer_activation = None
+        if self.kernel_activation == 'prelu':
+            inline_activation = 'linear'
+            def layer_activation():
+                return keras.layers.PReLU()
+
         d1, d2 = data
         dif = lay.Subtract()([d1, d2])
         x = lay.Concatenate(axis=-1)([d1, dif])
@@ -115,8 +123,10 @@ class EdgeConv(lay.Layer):
         if self.kernel_l1 > 0 or self.kernel_l2 > 0:
             reg = keras.regularizers.l1_l2(l1=self.kernel_l1, l2=self.kernel_l2)
         for dim in self.kernel_layers:
-            x = lay.Dense(dim, name=self.layer_name('kern_dense'), activation=self.kernel_activation,
+            x = lay.Dense(dim, name=self.layer_name('kern_dense'), activation=inline_activation,
                           kernel_regularizer=reg)(x)
+            if layer_activation is not None:
+                x = layer_activation()(x)
         return x
 
     def get_config(self):
