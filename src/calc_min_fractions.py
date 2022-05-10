@@ -1,5 +1,8 @@
 import argparse
-from train_healpix import test_seed
+
+import numpy as np
+
+from train import test_seed, f_sampler
 
 cline_parser = argparse.ArgumentParser(description='Calculate minimal detectable fraction',
                                        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -11,7 +14,7 @@ def add_arg(*pargs, **kwargs):
 
 add_arg('--f_src', type=float, help='fraction of "from-source" EECRs [0,1] or -1 for random', default=-1)
 add_arg('--Neecr', type=int, help='Total number of EECRs in each sample', default=500)
-add_arg('--Emin', type=int, help='Emin in EeV for which the input sample was generated', default=56)
+add_arg('--Emin', type=int, help='Emin in EeV for which the input sample was generated', default=28)
 add_arg('--EminData', type=float, help='minimal data energy in EeV', default=56)
 # add_arg('--source_id', type=str,
 #         help='source (CenA, NGC253, M82, M87 or FornaxA) or comma separated list of sources or "all"',
@@ -39,6 +42,7 @@ add_arg('--sigmaLnE', type=float, help='deltaE/E energy resolution', default=0.2
 add_arg('--seed', type=int, help='sample generator seed', default=test_seed)
 add_arg('--exclude_energy', action='store_true', help='legacy mode without energy as extra observable')
 add_arg('--exposure', type=str, help='exposure: uniform/TA', default='uniform')
+add_arg('--n_iterations', type=int, help='increase number of iterations for more precise result', default=1)
 
 args = cline_parser.parse_args()
 if len(args.fractions) > 0:
@@ -53,12 +57,34 @@ except:
     model = train_gcnn.create_model(args.Neecr, pretrained=args.model)
     Generator = train_gcnn.SampleGenerator
 
+test_batches = (args.seed == test_seed)
+if not test_batches:
+    np.random.seed(args.seed)
+
 gen = Generator(
-        args, deterministic=True, sources=args.sources, suffix=args.suffix, seed=args.seed, mixture=args.fractions)
+        args, deterministic=test_batches, sources=args.sources, suffix=args.suffix, seed=args.seed, mixture=args.fractions)
 
 from beta import calc_detectable_frac
-frac, alpha = calc_detectable_frac(gen, model, args)
-print(frac, alpha)
+
+frac_search_range = np.sqrt(args.Neecr)
+
+for i in range(args.n_iterations):
+    print(f'{args.f_src_min} <= frac <= {args.f_src_max}')
+    frac, alpha = calc_detectable_frac(gen, model, args)
+    print(f'iteration {i+1} of {args.n_iterations}: frac={frac}, alpha={alpha}')
+    if frac == 1:
+        break
+
+    if frac - args.f_src_min <= 1/args.Neecr and args.f_src_max - frac <= 1/args.Neecr:
+        break
+
+    f_src_min_boundary = (args.Neecr * frac - 1) / args.Neecr
+    f_src_max_boundary = min(1, (args.Neecr * frac + 1) / args.Neecr)
+    args.f_src_min = min(f_src_min_boundary, frac / frac_search_range)
+    args.f_src_max = max(f_src_max_boundary, frac * frac_search_range)
+
+    frac_search_range = np.sqrt(frac_search_range)
+    gen.sampler = f_sampler(args)
 
 out_file = args.model + "_cmp.txt"
 with open(out_file, "a") as d:
@@ -71,5 +97,3 @@ with open(out_file, "a") as d:
     d.write("frac={:7.2f}\n".format(frac*100))
     d.write("alpha={:6.4f}\n".format(alpha))
     d.write("------------------------------\n")
-
-
