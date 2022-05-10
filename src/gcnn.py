@@ -3,11 +3,8 @@ from tensorflow.keras.layers import Dense, GlobalAvgPool1D, Input, Dropout, Batc
 
 import edgeconv
 
-layer_idx = [-1]
-
 def layer_name(prefix):
-    layer_idx[0] += 1
-    return prefix + f'_{layer_idx[0]}'
+    return edgeconv.EdgeConv.layer_name(prefix)
 
 custom_objects = {"EdgeConv": edgeconv.EdgeConv, "SplitLayer": edgeconv.SplitLayer, "mean": keras.backend.mean}
 
@@ -20,7 +17,7 @@ def create_model(n_points, n_features=4, kernel_layers=5*[52], n_conv=5, dense_l
     if activation == 'prelu':
         inline_activation = 'linear'
         def layer_activation():
-            return keras.layers.PReLU()
+            return keras.layers.PReLU(name=layer_name('prelu'))
 
     weight_reg = None
     if l1 > 0 or l2 > 0:

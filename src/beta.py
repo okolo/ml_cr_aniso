@@ -57,9 +57,14 @@ def calc_beta_eta(gen, model, alpha, gen2=None, beta_threshold=None, verbose=0):
     fractions = fractions[idx]
     xi = xi[idx]
 
-    thr_idx = np.where(xi > alpha_thr)[0][0]
-
     fracs = np.array(sorted(list(set(fractions))))
+
+    thr_idx = np.where(xi > alpha_thr)[0]
+    if len(thr_idx) > 0:
+        thr_idx = thr_idx[0]
+    else:
+        beta = np.ones_like(fracs)
+        return fracs, beta, 1.
 
     beta = np.zeros_like(fracs)
 
@@ -266,6 +271,7 @@ def calc_detectable_frac(gen, model, args, gen2=None, swap_h0_and_h1=False, verb
     f_src_min = args.f_src_min
     f_src_max = args.f_src_max
     add_iso = gen.add_iso
+    sampler = gen.sampler
     try:
         for i in range(n_iterations):
             if verbose > 0:
@@ -289,6 +295,7 @@ def calc_detectable_frac(gen, model, args, gen2=None, swap_h0_and_h1=False, verb
         args.f_src_min = f_src_min
         args.f_src_max = f_src_max
         gen.add_iso = add_iso
+        gen.sampler = sampler
 
     return th_eta, _alpha
 

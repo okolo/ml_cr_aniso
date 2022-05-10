@@ -114,7 +114,7 @@ class EdgeConv(lay.Layer):
         if self.kernel_activation == 'prelu':
             inline_activation = 'linear'
             def layer_activation():
-                return keras.layers.PReLU()
+                return keras.layers.PReLU(name=self.layer_name('kern_prelu'))
 
         d1, d2 = data
         dif = lay.Subtract()([d1, d2])
