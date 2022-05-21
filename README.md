@@ -13,15 +13,15 @@ Please cite the following <a href="https://arxiv.org/abs/1912.00625">paper</a>
 
 1. Sample 100000 events (E,Z pairs) with energy above 56 EeV for the source located at 3.5 Mpc 
 
-    <pre><code>python psample.py --distance 3.5 --Nini 100000 --Emin 56</code></pre>
+    <pre><code>python3 psample.py --distance 3.5 --Nini 100000 --Emin 56</code></pre>
 
     * same with mass composition shift A -> A/2
 
-    <pre><code>python psample.py --distance 3.5 --Nini 100000 --Emin 56 --shiftA 0.5</code></pre>
+    <pre><code>python3 psample.py --distance 3.5 --Nini 100000 --Emin 56 --shiftA 0.5</code></pre>
    
     * same with monochromatic composition, e.g. A=16
 
-    <pre><code>python psample.py --distance 3.5 --Nini 100000 --Emin 56 --shiftA -16</code></pre>
+    <pre><code>python3 psample.py --distance 3.5 --Nini 100000 --Emin 56 --shiftA -16</code></pre>
 
 2. sorting output
 
@@ -30,11 +30,11 @@ Please cite the following <a href="https://arxiv.org/abs/1912.00625">paper</a>
 ### 3. Deflection map preparation
 
 #### Prerequisites:
-Install <a href="https://github.com/CRPropa/CRPropa3">crpropa</a> along with python integration
+Install <a href="https://github.com/CRPropa/CRPropa3">crpropa</a> along with python3 integration
 #### Command
 To calculate deflection map for pair _E, Z_ run command
 
-<pre><code>python galback.py Z E</code></pre>
+<pre><code>python3 galback.py Z E</code></pre>
 
 You can edit healpix grid resolution parameter Nside and galactic magnetic fields model in galback.py
 For list of available galactic magnetic field models scroll to line
@@ -49,7 +49,7 @@ in _galback.py_
 * data/jf/32 should contain deflection maps for all pair E,Z (e.g. helium_141EeV.txt.xz etc.), where jf is magnetic field model
 
 #### Command
-<pre><code>python src_sample.py --source_id CenA --Nside 32 --Nini 100000 --GMF jf --Emin 56</code></pre>
+<pre><code>python3 src_sample.py --source_id CenA --Nside 32 --Nini 100000 --GMF jf --Emin 56</code></pre>
 
 #### Output
 file with arrival directions density map
@@ -59,7 +59,7 @@ _data/jf/sources/src_sample_CenA_D3.5_Emin56_N100000_R1_Nside32.txt.xz_
 We advice to generate maps for higher _Nside_ i.e. _Nside=512_ and convert them to lower _Nside_ if needed.
 This can be done with the following command
 
-    python convert_src_sample.py --source CenA --Nside_ini 512 --Nini 100000 --mf jf --Nside 32
+    python3 convert_src_sample.py --source CenA --Nside_ini 512 --Nini 100000 --mf jf --Nside 32
   
 ### 5. Train classifier on HEALPix grid and estimate minimal from-source event fraction
 
@@ -70,16 +70,18 @@ _data/jf/sources/_
 
 For single source classifier
 
-    python train_healpix.py --source_id CenA --Neecr 500 --log_sample --n_samples 100000 --mf jf --n_early_stop 2 --Nside 32
+    python3 train_healpix.py --source_id CenA --Neecr 500 --log_sample --n_samples 100000 --mf jf --n_early_stop 2 --Nside 32
 
 For multisource classifier
 
-    python train_healpix.py --source_id "CenA,M82,NGC253,M87,FornaxA" ...
+    python3 train_healpix.py --source_id "CenA,M82,NGC253,M87,FornaxA" ...
 
 To check the resulting test statistic performance for alternative magnetic field model
 use --compare_mf flag:
 
-    python train_healpix.py --mf jf --compare_mf pt ...
+    python3 train_healpix.py --mf jf --compare_mf pt ...
+
+For nonuniform exposure use --exposure flag. Example of Telescope Array exposure is provided in exposure.py
 
 #### Output
 
@@ -98,19 +100,58 @@ patch < (uhecr_aniso dir)/src/nnhealpix_layers.patch
 </code></pre>
 
 #### Command
-    python calc_min_fractions.py data/jf/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32_shift2.0.txt.xz --log_sample --Neecr 300 --n_samples 10000 --Nside 32 --model CenA_FornaxA_M82_M87_NGC253_N300_Bjf_Ns32-1_F32_v0.h5
+    python3 calc_min_fractions.py data/jf/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32_shift2.0.txt.xz --log_sample --Neecr 300 --n_samples 10000 --Nside 32 --model CenA_FornaxA_M82_M87_NGC253_N300_Bjf_Ns32-1_F32_v0.h5
 
 In case several _src_sample_ files are given, maps are generated using each of them
 in roughly equal amounts (only one random map is used for each sample generation)
 
 With flag _--fractions_ several maps in given proportions can be used for each sample generation, e.g.:
 
-    python calc_min_fractions.py data/jf/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz  data/jf/sources/src_sample_FornaxA_D20.0_Emin56_N10000_R1_Nside32.txt.xz  --fractions 3 1 --log_sample --Neecr 300 --n_samples 10000 --Nside 32 --model CenA_FornaxA_M82_M87_NGC253_N300_Bjf_Ns32-1_F32_v0.h5
+    python3 calc_min_fractions.py data/jf/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32.txt.xz  data/jf/sources/src_sample_FornaxA_D20.0_Emin56_N10000_R1_Nside32.txt.xz  --fractions 3 1 --log_sample --Neecr 300 --n_samples 10000 --Nside 32 --model CenA_FornaxA_M82_M87_NGC253_N300_Bjf_Ns32-1_F32_v0.h5
 
 #### Output
 Program outputs minimal detectable from-source event fraction on particular map(s) along with type I error alpha.
 The information is appended to log file
 CenA_FornaxA_M82_M87_NGC253_N300_Bjf_Ns32-1_F32_v0.h5_cmp.txt
+
+## Graph convolutional neural network based test statistics
+
+### 1. Train classifier and estimate minimal from-source event fraction
+Current implementation uses HEALPix maps of the from-source events.
+#### Prerequisites:
+* Corresponding from-source event maps prepared in step 4. of the previous section should be located in folder
+_data/jf/sources/_
+#### Command
+
+For single source classifier
+
+    python3 train_gcnn.py --source_id CenA --Neecr 100 --log_sample --n_samples 10000 --n_early_stop 2 --Nside 256 --Nini 100000 --n_epochs 20
+
+For multisource classifier
+
+    python3 train_gcnn.py --source_id "CenA,M82,NGC253,M87,FornaxA" ...
+
+To check the resulting test statistic performance for alternative magnetic field model
+use --compare_mf flag:
+
+    python3 train_gcnn.py --mf jf --compare_mf pt ...
+
+#### Output
+
+* CenA_N100_Bjf_gc3_k10_K30_20_D256_sig20_v0.h5 neural network classifier 
+* CenA_N100_Bjf_gc3_k10_K30_20_D256_sig20_v0.h5.score text file with classifier and test statistic metrics
+* CenA_N100_Bjf_gc3_k10_K30_20_D256_sig20_v0.h5_det_frac.txt log file containing the evolution of minimal from-source event fraction 
+during neural network training
+
+### 2. Apply pretrained network classifier to an arbitrary event map
+
+#### Prerequisites:
+* Event map(s) must be saved in _src_sample_ format (see step 4. of the previous section)
+* Model should be prepaired
+
+#### Command
+
+    python3 calc_min_fractions.py data/jf/sources/src_sample_CenA_D3.5_Emin56_N10000_R1_Nside32_shift2.0.txt.xz --log_sample --Neecr 300 --n_samples 10000 --Nside 32 --model CenA_N100_Bjf_gc3_k10_K30_20_D256_sig20_v0.h5
 
 ## Angular power spectrum based test statistic
 
