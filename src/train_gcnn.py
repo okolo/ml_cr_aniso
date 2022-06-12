@@ -214,6 +214,7 @@ class SampleGenerator(keras.utils.Sequence):
 
 def main():
     init_train_cline_args('Train dinamic graph convolutional network')
+    add_arg('--disable_dinamic_conv', action='store_true', help='disable dinamic convolutions (use standard graph convolutions)')
     args = cl_args()
 
     if args.source_id == 'all':
@@ -348,7 +349,8 @@ def main():
 
     n_features = 3 if args.exclude_energy else 4
 
-    model = create_model(args.Neecr, n_features=n_features, pretrained=args.pretrained)
+    model = create_model(args.Neecr, n_features=n_features, pretrained=args.pretrained,
+                         dinamic_conv=(not args.disable_dinamic_conv))
 
     if args.pretrained and len(args.output_prefix) == 0:
         save_name = args.pretrained[:-3]

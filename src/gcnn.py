@@ -11,7 +11,7 @@ custom_objects = {"EdgeConv": edgeconv.EdgeConv, "SplitLayer": edgeconv.SplitLay
 def create_model(n_points, n_features=4, kernel_layers=2*[80], n_conv=2, dense_layers=[], k_neighbors=8,
                  pretrained='', l2=0.000493, l1=0.000053, dropout_rate=0.13,
                  normalize=True, activation='relu', output_activation='sigmoid',
-                 loss='binary_crossentropy', metrics='accuracy', lr=0.001):
+                 loss='binary_crossentropy', metrics='accuracy', lr=0.001, dinamic_conv=True):
 # default values for the parameters above were obtained with optimization for n_points=100
     inline_activation = activation
     layer_activation = None
@@ -42,7 +42,10 @@ def create_model(n_points, n_features=4, kernel_layers=2*[80], n_conv=2, dense_l
 
         out = EdgeConv([points, norm_features])
         for i in range(1, n_conv):
-            out = EdgeConv(out)
+            if dinamic_conv:
+                out = EdgeConv(out)
+            else:
+                out = EdgeConv([points, out])
         out = GlobalAvgPool1D()(out)
         for dim in dense_layers:
             out = Dense(dim, activation=inline_activation, kernel_regularizer=weight_reg, name=layer_name('dense'))(out)
