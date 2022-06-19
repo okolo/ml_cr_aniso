@@ -205,16 +205,18 @@ class SampleGenerator(keras.utils.Sequence):
 
         if not self.return_frac:
             answers = (answers > self.threshold)
-        batch = np.array(batch)
+        batch_features = np.array(batch)
         if self.exclude_energy:
-            batch = batch[:,:,:3]
+            batch_features = batch_features[:,:,:3]
 
-        return batch, answers
+        return batch_features, answers
 
 
 def main():
     init_train_cline_args('Train dinamic graph convolutional network')
     add_arg('--disable_dinamic_conv', action='store_true', help='disable dinamic convolutions (use standard graph convolutions)')
+    add_arg('--use_energy_as_feature', action='store_true', help='use energy as feature only (not coordinate)')
+
     args = cl_args()
 
     if args.source_id == 'all':
@@ -348,8 +350,12 @@ def main():
                         print('alpha_' + src_name + '_' + args.test_mf, test_alpha, file=file)
 
     n_features = 3 if args.exclude_energy else 4
+    if args.use_energy_as_feature and not args.exclude_energy:
+        n_coords = n_features - 1
+    else:
+        n_coords = n_features
 
-    model = create_model(args.Neecr, n_features=n_features, pretrained=args.pretrained,
+    model = create_model(args.Neecr, n_coords=n_coords, n_features=n_features, pretrained=args.pretrained,
                          dinamic_conv=(not args.disable_dinamic_conv))
 
     if args.pretrained and len(args.output_prefix) == 0:
@@ -366,7 +372,8 @@ def main():
         save_name += '_sig{:.0f}'.format(100*args.sigmaLnE)
         if args.exclude_energy:
             save_name += '_noE'
-
+        elif args.use_energy_as_feature:
+            save_name += '_noEcoord'
 
     train_model(model, save_name, batch_size=args.batch_size, epochs=args.n_epochs,
                 n_early_stop_epochs=args.n_early_stop)

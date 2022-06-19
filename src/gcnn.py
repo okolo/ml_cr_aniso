@@ -8,11 +8,14 @@ def layer_name(prefix):
 
 custom_objects = {"EdgeConv": edgeconv.EdgeConv, "SplitLayer": edgeconv.SplitLayer, "mean": keras.backend.mean}
 
-def create_model(n_points, n_features=4, kernel_layers=2*[80], n_conv=2, dense_layers=[], k_neighbors=8,
+def create_model(n_points, n_coords=4,  n_features=None, kernel_layers=2*[80], n_conv=2, dense_layers=[], k_neighbors=8,
                  pretrained='', l2=0.000493, l1=0.000053, dropout_rate=0.13,
                  normalize=True, activation='relu', output_activation='sigmoid',
                  loss='binary_crossentropy', metrics='accuracy', lr=0.001, dinamic_conv=True):
 # default values for the parameters above were obtained with optimization for n_points=100
+    if n_features is None:
+        n_features = n_coords
+    assert n_coords <= n_features
     inline_activation = activation
     layer_activation = None
     if activation == 'prelu':
@@ -27,9 +30,13 @@ def create_model(n_points, n_features=4, kernel_layers=2*[80], n_conv=2, dense_l
     if pretrained:
         model = keras.models.load_model(pretrained, compile=False, custom_objects=custom_objects)
     else:
-        points = Input((n_points, n_features), name=layer_name('dgcnn_in'))
-        features = points
-        norm_features = points
+        features = Input((n_points, n_features), name=layer_name('dgcnn_in'))
+        if n_coords < n_features:
+            points = keras.layers.Lambda(lambda x: x[:,:,:n_coords])(features)
+        else:
+            points = features
+
+        norm_features = features
         if normalize:
             norm_features = BatchNormalization(name=layer_name('batch_norm'))(features)
 
@@ -54,7 +61,7 @@ def create_model(n_points, n_features=4, kernel_layers=2*[80], n_conv=2, dense_l
             if dropout_rate > 0:
                 out = Dropout(dropout_rate, name=layer_name('dropout'))(out)
         out = Dense(1, activation=output_activation, kernel_regularizer=weight_reg, name=layer_name('dense'))(out)
-        model = keras.models.Model([points], out)
+        model = keras.models.Model(features, out)
 
     model.summary()
 
