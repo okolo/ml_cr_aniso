@@ -74,6 +74,8 @@ class GeometricExposure(Exposure):
 def create_exposure(args):
     if args.exposure == 'TA':
         return GeometricExposure(detector_latitude_deg=39.2969, max_theta_deg=55)
+    if args.exposure == 'Auger':
+        return GeometricExposure(detector_latitude_deg=-35.4666648, max_theta_deg=55)
     elif args.exposure == 'uniform':
         return None
     else:
