@@ -1,7 +1,7 @@
 from tensorflow import keras
 from tensorflow.keras.layers import Dense, GlobalAvgPool1D, Input, Dropout, BatchNormalization
 
-import edgeconv
+from models import edgeconv
 
 def layer_name(prefix):
     return edgeconv.EdgeConv.layer_name(prefix)
@@ -42,10 +42,10 @@ def create_model(n_points, n_coords=4,  n_features=None, kernel_layers=2*[80], n
 
         def EdgeConv(x):
             return edgeconv.EdgeConv(next_neighbors=k_neighbors,
-                 kernel_layers=kernel_layers,
-                 kernel_l1=l1,
-                 kernel_l2=l2,
-                 kernel_activation=activation)(x)
+                                     kernel_layers=kernel_layers,
+                                     kernel_l1=l1,
+                                     kernel_l2=l2,
+                                     kernel_activation=activation)(x)
 
         out = EdgeConv([points, norm_features])
         for i in range(1, n_conv):
