@@ -3,7 +3,7 @@ import pytest
 
 import numpy as np
 from argparse import Namespace
-from src.data_models import SampleGeneratorKeras, SampleGeneratorTorch, BaseGenerator
+from src.generators import SampleGeneratorKeras, SampleGeneratorTorch, BaseGenerator
 
 torch_available = 'torch' in sys.modules
 keras_available = 'tensorflow' in sys.modules or 'keras' in sys.modules
