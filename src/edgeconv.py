@@ -1,14 +1,16 @@
 """Implementation of EdgeConv
 original source: https://git.rwth-aachen.de/niklas.langner/edgeconv_keras
 author: Niklas Uwe Langner
-the code was adopted for tensorflow 2.6+ (original code had issues with model loading from h5 file)
+the code was adopted for tensorflow ~=2.20 (original code had issues with model loading from h5 file)
 """
 import tensorflow as tf
-import tensorflow.keras.layers as lay
+from tensorflow.keras import layers
 from tensorflow import keras
+from keras.saving import register_keras_serializable
 
 
-class SplitLayer(lay.Layer):
+@register_keras_serializable()
+class SplitLayer(layers.Layer):
     """ Custom layer: split layer along specific axis.
     eg. split (1,9) into 9 x (1,1)
 
@@ -34,13 +36,15 @@ class SplitLayer(lay.Layer):
         super(SplitLayer, self).__init__(**kwargs)
 
     def get_config(self):
-        config = {'n_splits': self.n_splits,
-                  'split_axis': self.split_axis}
-        base_config = super(SplitLayer, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+        config = super(SplitLayer, self).get_config()
+        config.update({
+            'n_splits': self.n_splits,
+            'split_axis': self.split_axis
+        })
+        return config
 
     def call(self, x):
-        ''' return array of splitted tensors '''
+        """return array of splitted tensors"""
         sub_tensors = tf.split(x, self.n_splits, axis=self.split_axis)
         return sub_tensors
 
@@ -52,12 +56,13 @@ class SplitLayer(lay.Layer):
         list_of_output_shape = [sub_tensor_shape] * self.n_splits
         return list_of_output_shape
 
-    def compute_mask(self, inputs, mask=None):
-        return self.n_splits * [None]
+    # def compute_mask(self, inputs, mask=None):
+     #    return self.n_splits * [None]
 
 
-class EdgeConv(lay.Layer):
-    '''
+@register_keras_serializable()
+class EdgeConv(layers.Layer):
+    """
     Keras layer implementation of EdgeConv.
     # Arguments
         kernel_func: h-function applied on the points and it's k nearest neighbors. The function should take a list
@@ -78,7 +83,7 @@ class EdgeConv(lay.Layer):
         Tensor with shape:
         `(batch, P, C_h)`
         with C_h being the output dimension of the h-function.
-    '''
+    """
     layer_idx = -1
 
     @classmethod
@@ -87,7 +92,7 @@ class EdgeConv(lay.Layer):
         return prefix + f'{cls.layer_idx}'
 
     def __init__(self, next_neighbors,
-                 kernel_layers=[30, 20],
+                 kernel_layers: list = [30, 20],
                  kernel_l1=0,
                  kernel_l2=0,
                  kernel_activation='relu',
@@ -99,45 +104,56 @@ class EdgeConv(lay.Layer):
         self.kernel_l1 = kernel_l1
         self.kernel_l2 = kernel_l2
         self.kernel_activation = kernel_activation
+
         if 'name' not in kwargs:
             kwargs['name'] = self.layer_name('edge_conv')
-        if type(agg_func) == str:
-            raise ValueError("No such agg_func '%s'. When loading the model specify the agg_func '%s' via custom_objects" % (agg_func, agg_func))
+
+        if isinstance(agg_func, str):
+            raise ValueError(
+                "No such agg_func '%s'. When loading the model specify the agg_func '%s' via custom_objects"
+                % (agg_func, agg_func)
+            )
+
         self.kernel_model = None
         super(EdgeConv, self).__init__(**kwargs)
-
 
     def kernel_func(self, data):
         # support for prelu activation
         inline_activation = self.kernel_activation
         layer_activation = None
+
         if self.kernel_activation == 'prelu':
             inline_activation = 'linear'
             def layer_activation():
                 return keras.layers.PReLU(name=self.layer_name('kern_prelu'))
 
         d1, d2 = data
-        dif = lay.Subtract()([d1, d2])
-        x = lay.Concatenate(axis=-1)([d1, dif])
+        dif = layers.Subtract()([d1, d2])
+        x = layers.Concatenate(axis=-1)([d1, dif])
+
         reg = None
         if self.kernel_l1 > 0 or self.kernel_l2 > 0:
-            reg = keras.regularizers.l1_l2(l1=self.kernel_l1, l2=self.kernel_l2)
-        for dim in self.kernel_layers:
-            x = lay.Dense(dim, name=self.layer_name('kern_dense'), activation=inline_activation,
-                          kernel_regularizer=reg)(x)
+            reg = keras.regularizers.L1L2(l1=self.kernel_l1, l2=self.kernel_l2)
+
+        for i, dim in enumerate(self.kernel_layers):
+            x = layers.Dense(dim, name=f'{self.name}_kern_dense_{i}',
+                             activation=inline_activation, kernel_regularizer=reg)(x)
             if layer_activation is not None:
                 x = layer_activation()(x)
+
         return x
 
     def get_config(self):
-        config = {'next_neighbors': self.next_neighbors,
-                  'kernel_layers': self.kernel_layers,
-                  'kernel_l1': self.kernel_l1,
-                  'kernel_l2': self.kernel_l2,
-                  'kernel_activation': self.kernel_activation,
-                  'agg_func': self.agg_func}
-        base_config = super(EdgeConv, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+        config = super(EdgeConv, self).get_config()
+        config.update({
+            'next_neighbors': self.next_neighbors,
+            'kernel_layers': self.kernel_layers,
+            'kernel_l1': self.kernel_l1,
+            'kernel_l2': self.kernel_l2,
+            'kernel_activation': self.kernel_activation,
+            'agg_func': self.agg_func
+        })
+        return config
 
     def build(self, input_shape):
         # Create a trainable weight variable for this layer.
@@ -147,13 +163,13 @@ class EdgeConv(lay.Layer):
             f_shape = input_shape
 
         if self.kernel_model is None:  # for not wrapping model around model when loading model
-            x = lay.Input((f_shape.as_list()[-1] * 2,))
-            a = lay.Reshape((2, f_shape.as_list()[-1]))(x)
-            x1, x2 = SplitLayer(n_splits=2, split_axis=-2)(a)  # (2, C)
-            x1 = lay.Reshape((f_shape.as_list()[-1],))(x1)
-            x2 = lay.Reshape((f_shape.as_list()[-1],))(x2)
+            x_input = layers.Input(shape=(f_shape[-1] * 2,))
+            x_reshaped = layers.Reshape((2, f_shape[-1]))(x_input)
+            x1, x2 = SplitLayer(n_splits=2, split_axis=1)(x_reshaped)  # (2, C)
+            x1 = layers.Reshape((f_shape[-1],))(x1)
+            x2 = layers.Reshape((f_shape[-1],))(x2)
             y = self.kernel_func([x1, x2])
-            self.kernel_model = keras.models.Model(x, y)
+            self.kernel_model = keras.models.Model(x_input, y)
 
         super(EdgeConv, self).build(input_shape)  # Be sure to call this at the end
 
@@ -163,25 +179,31 @@ class EdgeConv(lay.Layer):
         except TypeError:
             points = features = x
 
-        # distance
+        # distance matrix
         D = batch_distance_matrix_general(points, points)  # (N, P, P)
+
+        # Get k nearest neighbors
         _, indices = tf.nn.top_k(-D, k=self.next_neighbors + 1)  # (N, P, K+1)
         indices = indices[:, :, 1:]  # (N, P, K) remove self connection
+
+        # Get features of nearest neighbors
         knn_fts = knn(indices, features)  # (N, P, K, C)
-        knn_fts_center = tf.tile(tf.expand_dims(features, axis=2), (1, 1, self.next_neighbors, 1))  # (N, P, K, C)
+
+        # Tile center features to match neighbor dimensions
+        knn_fts_center = tf.tile(tf.expand_dims(features, axis=2),
+                                 [1, 1, self.next_neighbors, 1])  # (N, P, K, C)
+
+        # Concatenate center and neighbor features
         knn_fts = tf.concat([knn_fts_center, knn_fts], axis=-1)  # (N, P, K, 2*C)
-        res = lay.TimeDistributed(lay.TimeDistributed(self.kernel_model))(knn_fts)  # (N, P, K, C')
+
+        res = layers.TimeDistributed(layers.TimeDistributed(self.kernel_model))(knn_fts)  # (N, P, K, C')
         # aggregation
         agg = self.agg_func(res, axis=2)  # (N, P, C')
         return agg
 
-    def compute_output_shape(self, input_shape):
-        self.output_shape = self.kernel_func.get_output_shape_at(-1)
-        return self.output_shape
-
 
 def batch_distance_matrix_general(A, B):
-    ''' Calculate elements-wise distance between entries in two tensors '''
+    """Calculate elements-wise distance between entries in two tensors"""
     with tf.name_scope('dmat'):
         r_A = tf.reduce_sum(A * A, axis=2, keepdims=True)
         r_B = tf.reduce_sum(B * B, axis=2, keepdims=True)
