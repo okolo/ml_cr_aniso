@@ -7,6 +7,11 @@ from sys import stderr
 from abc import ABC, abstractmethod
 from typing import Optional, List, Union, Generator
 
+import torch
+from torch import Tensor
+from torch.utils.data import Dataset
+from tensorflow.keras.utils import Sequence
+
 from argparse import Namespace
 from astropy.coordinates import SkyCoord
 from astropy import units as u
@@ -268,3 +273,53 @@ class BaseGenerator(ABC):
             coordinates = coordinates[:, :3]
 
         return coordinates, answer
+
+
+class SampleGeneratorTorch(BaseGenerator, Dataset):
+    """
+    Sample generator for pytorch.Dataset class.
+     NOTE: __getitem__ returns single healpix map
+
+     n_batches:
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def __getitem__(self, index: int) -> tuple[Tensor, Tensor]:
+
+        if self.deterministic and index == 0:
+            np.random.seed(index + self.seed)
+
+        feature, answer = self._generate_single_sample(index=index)
+
+        return torch.from_numpy(feature.astype(np.float32)), torch.tensor(answer, dtype=torch.float32)
+
+    def __len__(self) -> int:
+        return self.n_samples
+
+
+class SampleGeneratorKeras(BaseGenerator, Sequence):
+    """
+    Sample generator for keras.Sequence
+     NOTE: __getitem__ returns batch of healpix maps
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def __getitem__(self, batch_i: int) -> tuple[np.ndarray, np.ndarray]:
+        if self.deterministic and batch_i == 0:
+            np.random.seed(batch_i + self.seed)
+
+        answers = []
+        batch = []
+        for i in range(self.batch_size):
+            feature, answer = self._generate_single_sample(index=i)
+            answers.append(answer)
+            batch.append(feature)
+
+        batch = np.stack(batch, axis=0)
+        answers = np.stack(answers, axis=0)
+        return batch, answers
+
+    def __len__(self) -> int:
+        return self.n_batches
