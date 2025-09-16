@@ -21,6 +21,11 @@ dependencies = [
     "aioredis~=2.0.1"
 ]
 
+[dependency-groups]
+tests = [
+    "pytest>=8.4.1"
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["pkg*"]
