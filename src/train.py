@@ -1,10 +1,14 @@
-import numpy as np
 import losses
+import numpy as np
+
+from typing import Generator, Tuple, Optional
+from argparse import Namespace
 from utils import add_arg, create_cline_parser, cl_args
 
 train_seed = 0
 val_seed = 2 ** 20
 test_seed = 2 ** 26
+
 
 def get_loss(loss):
     # try to find loss by name in losses module
@@ -14,6 +18,7 @@ def get_loss(loss):
     except AttributeError:
         pass
     return loss
+
 
 source_data = {
     # Name : [source_lon, source_lat, D_src]
@@ -25,6 +30,7 @@ source_data = {
     'FornaxA': [240.1627,-56.6898,'20.0']
 }
 
+
 def get_source_data(source_id):
     if source_id in source_data:
         return tuple(source_data[source_id])
@@ -32,19 +38,43 @@ def get_source_data(source_id):
         raise ValueError('Unknown source!')
 
 
-def load_src_sample(args, suffix='', sources=None, mf=None):
+def load_src_sample(
+        args: Namespace,
+        suffix: str = '',
+        sources: Optional[list] = None,
+        mf: Optional[str] = None
+) -> Generator[np.ndarray]:
     """
-    Load data from src_sample files
-    :param args: command line params (used if sources are given by name or not given at all)
-    :param suffix: may be used to select a ranage of files (e.g. suffix='*') or specific realizations
-    :param sources: optional explicit list of sources or files
-    :return:
+    Load data from src_sample files and yield numpy arrays
+
+    Parameters
+    ----------
+    args : Namespace
+        Command line arguments or configuration object containing parameters:
+
+    suffix : str, optional
+        May be used to select a ranage of files (e.g. suffix='*') or specific realizations
+        Example: '*' for glob pattern matching, '_001' for specific realization
+
+    sources : List[str], optional
+        Explicit list of sources or file paths to load. If None, uses args.source_id.
+        Example: ['source1', 'source2'] or ['/path/to/src_sample_*.txt.xz']
+
+    mf : str, optional
+        Magnetic field model. If None, uses args.mf.
+
+    Yields
+    ------
+    np.ndarray
+        Numpy array containing the data loaded from each source sample file.
+        The array dtype is float and shape depends on the content of each file.
     """
     import lzma
     import glob
 
     if sources is None:
         sources = args.source_id.split(',')
+
     if mf is None:
         mf = args.mf
 
@@ -54,11 +84,11 @@ def load_src_sample(args, suffix='', sources=None, mf=None):
         else:
             _, _, D_src = get_source_data(source_id)  # looks like source name
             infiles = ('src_sample_' + source_id + '_D' + D_src
-                      + '_Emin' + str(args.Emin)
-                      + '_N' + str(args.Nini)
-                      + '_R' + str(args.source_vicinity_radius)
-                      + '_Nside' + str(args.Nside) + suffix
-                      + '.txt.xz')
+                       + '_Emin' + str(args.Emin)
+                       + '_N' + str(args.Nini)
+                       + '_R' + str(args.source_vicinity_radius)
+                       + '_Nside' + str(args.Nside) + suffix
+                       + '.txt.xz')
             infiles = args.data_dir + '/' + mf + '/sources/' + infiles
         files = list(glob.glob(infiles))
         if len(files) == 0:
@@ -68,7 +98,49 @@ def load_src_sample(args, suffix='', sources=None, mf=None):
                 yield np.genfromtxt(f, dtype=float)
 
 
-def f_sampler(args, n_samples=-1, exclude_iso=False):  # if < 0, sample forever
+def f_sampler(
+        args: Namespace, n_samples: int = -1,  # if < 0, sample forever
+        exclude_iso: bool = False
+    ) -> Generator[Tuple[int, int]]:
+    """
+    Generator function that samples source and isotropic counts based on configuration parameters.
+
+    This function yields tuples of (Nsrc, Niso) counts where Nsrc + Niso = Neecr (total events).
+    The sampling behavior is controlled by parameters.
+
+    Parameters
+    ----------
+    args : Namespace
+        - Neecr (int): Total number of events
+        - f_src (float): If between 0 and 1, fixed fraction of source events
+        - f_src_min (float): Minimum fraction of source events (used when f_src is not specified)
+        - f_src_max (float): Maximum fraction of source events (used when f_src is not specified)
+        - log_sample (bool): If True, sample logarithmically in source count space
+
+    n_samples : int, optional
+        Number of samples to generate. If negative, generates samples indefinitely.
+        Default: -1 (sample forever)
+
+    exclude_iso : bool, optional
+        If True, ensures at least one source event (Nsrc >= 1) to exclude pure isotropic case.
+        Default: False
+
+    Yields
+    ------
+    tuple
+        (Nsrc, Niso) where:
+        - Nsrc (int): Number of source events
+        - Niso (int): Number of isotropic events
+        Always satisfies: Nsrc + Niso = args.Neecr
+
+    Notes
+    -----
+    The function supports three sampling modes:
+    1. Fixed fraction: When 0 <= args.f_src <= 1, uses fixed fraction for all samples
+    2. Linear sampling: When args.log_sample is False, samples uniformly between f_src_min and f_src_max
+    3. Logarithmic sampling: When args.log_sample is True, samples logarithmically between f_src_min and f_src_max
+    """
+
     Neecr = args.Neecr
     Fsrc = None
     if 0 <= args.f_src <= 1.:
@@ -107,8 +179,9 @@ def f_sampler(args, n_samples=-1, exclude_iso=False):  # if < 0, sample forever
                 Nsrc = np.random.randint(N_src_min, N_src_max+1)
 
         Niso = Neecr - Nsrc
-        yield (Nsrc, Niso)
+        yield Nsrc, Niso
         n += 1
+
 
 def plot_learning_curves(history, save_file=None, show_fig=False):
     import matplotlib.pyplot as plt
