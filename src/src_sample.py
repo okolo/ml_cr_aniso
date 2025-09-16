@@ -61,13 +61,11 @@ calculated for another Nside.
 An output file is called src_sample_ID....txt.xz and is placed
 in data/GMF/sources/
 """
-
-
 import sys
-import numpy as np
-from PyAstronomy.pyasl import getAngDist
 import argparse
+import numpy as np
 
+from angdist import getAngDist
 import lzma
 import healpy as hp
 import os
