@@ -4,10 +4,10 @@ by Oleg Kalashev, Maxim Pshirkov, Mikhail Zotov
 Please cite the following <a href="https://arxiv.org/abs/1912.00625">paper</a>
 
 ### Local installation
-Set up a virtual environment using python 3.8.20, e.g. using conda:
+Set up a virtual environment using python 3.13, e.g. using conda:
 
-<pre><code>conda create -n py38 python=3.8.20
-conda activate py38
+<pre><code>conda create -n py13 python=3.13
+conda activate py13
 </code></pre>  
 
 Install the package
@@ -19,11 +19,12 @@ Download [NNhealpix](https://github.com/ai4cmb/NNhealpix/tree/master) and instal
 pip install -r requirements.txt
 </code></pre>
 
-Download [CRPropa v.3.2](https://github.com/CRPropa/CRPropa3/tree/3.2) and install along with python3 integration. 
+Download [CRPropa v3.2.1](https://github.com/CRPropa/CRPropa3) and install along with python3 integration. 
+CRPropa is not compatible with listed package versions. Use python 3.10 and numpy ~1.26.
+
 For conda environment:
 <pre><code>git clone https://github.com/CRPropa/CRPropa3
 cd CRPropa3
-git checkout 3.2
 mkdir build
 cd build
 cmake .. \
@@ -32,7 +33,7 @@ cmake .. \
     -DPYTHON_EXECUTABLE=$(which python) \
     -DPYTHON_INCLUDE_DIR=$(python -c "from distutils.sysconfig import get_python_inc; print(get_python_inc())")
 make
-make install
+[sudo] make install
 </code></pre>
 
 Return to the project root repository.
