@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 import numpy as np
+from typing import List, Optional
+
 
 class Exposure(ABC):
     """
@@ -22,7 +24,7 @@ class Exposure(ABC):
         """
         pass
 
-    def gal_exposure(self, l, b, energy_EeV=0):
+    def gal_exposure(self, l: List[float], b: List[float], energy_EeV: float = 0):
         """
         :param l: longitude in degrees
         :param b: latitude in degrees
@@ -35,10 +37,16 @@ class Exposure(ABC):
         dec = icrs.dec/u.degree
         return self.eq_exposure(ra, dec, energy_EeV=energy_EeV)
 
+
 class GeometricExposure(Exposure):
     """
     pure geometric exposure at certain latitude implementation
     see page 6 of https://arxiv.org/pdf/astro-ph/0004016.pdf
+
+    Energy efficiency for Pierre Auger is ~ 1 for E > 1 EeV thus consideration is not necessary
+    see page 6 of https://arxiv.org/pdf/2109.13400
+
+    TODO: check Telescope Array energy efficiency and max_theta_deg
     """
     def __init__(self, detector_latitude_deg, max_theta_deg):
         """
@@ -53,7 +61,12 @@ class GeometricExposure(Exposure):
     def energy_dependent(self):
         return False
 
-    def eq_exposure(self, ra_deg, dec_deg, energy_EeV=0):
+    def eq_exposure(
+            self,
+            ra_deg: List[float],
+            dec_deg: List[float],
+            energy_EeV: Optional[List[float]] = None
+    ) -> np.ndarray:
         """
         :param ra_deg: vector containing right ascension in degrees
         :param dec_deg: vector containing declination in degrees
@@ -75,7 +88,7 @@ def create_exposure(args):
     if args.exposure == 'TA':
         return GeometricExposure(detector_latitude_deg=39.2969, max_theta_deg=55)
     if args.exposure == 'Auger':
-        return GeometricExposure(detector_latitude_deg=-35.4666648, max_theta_deg=55)
+        return GeometricExposure(detector_latitude_deg=-35.4666648, max_theta_deg=80)
     elif args.exposure == 'uniform':
         return None
     else:
