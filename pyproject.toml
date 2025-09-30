@@ -18,7 +18,9 @@ dependencies = [
     "pandas~=2.3.2",
     "ray[data,train,tune,serve]~=2.49.1",
     "aiohttp~=3.12.15",
-    "aioredis~=2.0.1"
+    "aioredis~=2.0.1",
+    "torch_geometric~=2.6.1",
+    "tqdm"
 ]
 
 [dependency-groups]
