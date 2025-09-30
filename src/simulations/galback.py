@@ -136,7 +136,7 @@ if GMF == "JF12":
     B = JF12Field()
 
     # Basename of an output file
-    output_file = ('data/jf0/' + str(Nside) + '/' + nucleus
+    output_file = ('../data/jf0/' + str(Nside) + '/' + nucleus
             + '_{:03d}'.format(E) + 'EeV.txt')
 
     if striated:
@@ -153,7 +153,7 @@ elif GMF == "JF12sol":
     B = JF12FieldSolenoidal(delta_sol * kpc, zs_sol * kpc)
 
     # Basename of an output file
-    output_file = ('data/jf_sol/' + str(Nside) + '/' + nucleus
+    output_file = ('../data/jf_sol/' + str(Nside) + '/' + nucleus
             + '_{:03d}'.format(E) + 'EeV.txt')
 
     B.randomStriated(random_seed)
@@ -166,7 +166,7 @@ elif GMF == "JF12Planck":
     B = PlanckJF12bField()
 
     # Basename of an output file
-    output_file = ('data/jf_pl/' + str(Nside) + '/' + nucleus
+    output_file = ('../data/jf_pl/' + str(Nside) + '/' + nucleus
             + '_{:03d}'.format(E) + 'EeV.txt')
 
     B.randomStriated(random_seed)
@@ -180,7 +180,7 @@ elif GMF=='PTKN11':
     B.setUseHalo(True)
 
     # Basename of an output file
-    output_file = ('data/pt/' + str(Nside) + '/' +nucleus
+    output_file = ('../data/pt/' + str(Nside) + '/' +nucleus
             + '_{:03d}'.format(E)
             + 'EeV.txt')
 
@@ -188,7 +188,7 @@ elif GMF == "TF17":
     B = TF17Field()
 
     # Basename of an output file
-    output_file = ('data/tf/' + str(Nside) + '/' +nucleus
+    output_file = ('../data/tf/' + str(Nside) + '/' +nucleus
             + '_{:03d}'.format(E)
             + 'EeV.txt')
 
@@ -203,7 +203,7 @@ else:
 # JF components and random ones
 if GMF == "JF12ST":
     # Basename of an output file
-    output_file = ('data/jf/' + str(Nside) + '/' +nucleus
+    output_file = ('../data/jf/' + str(Nside) + '/' +nucleus
             + '_{:03d}'.format(E)
             + 'EeV.txt')
 

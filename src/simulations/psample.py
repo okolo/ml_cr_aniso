@@ -39,7 +39,7 @@ shiftA = float(args.shiftA)
 if shiftA < 0:
     shiftA = int(shiftA)
 
-spec = np.loadtxt('spectra_1s/' + distance + '.gz')
+spec = np.loadtxt('../spectra_1s/' + distance + '.gz')
 
 output_file = 'sample_D' + distance + '_Emin' + args.Emin + '_' + str(Nini)
 if shiftA != 1.:
