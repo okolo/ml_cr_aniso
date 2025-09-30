@@ -65,9 +65,8 @@ import sys
 import argparse
 import numpy as np
 
-from angdist import getAngDist
+from simulations.angdist import getAngDist
 import lzma
-import healpy as hp
 import os
 
 #______________________________________________________________________
