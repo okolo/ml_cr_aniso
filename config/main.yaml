@@ -1,0 +1,70 @@
+
+# for future. the pipeline
+routine: gcnn
+
+cuda: True
+
+exposure: TA
+
+# Parameters for Generator class
+data:
+  source_id: M82                # source (CenA, NGC253, M82, M87 or FornaxA) or comma separated list of sources or "all"
+  f_src: -1.0                   # If between 0 and 1, fixed fraction of source events
+  f_src_max: 1.0                # Maximum fraction of source events (used when f_src is not specified)
+  f_src_min: 0.0                # Minimum fraction of source events (used when f_src is not specified)
+  Neecr: 20                     # Total number of EECRs in each sample
+  Emin: 56                      # Emin in EeV for which the input sample was generated
+  Nside: 32                     # healpix grid Nside parameter
+  Nini: 10000                   # size of the initial sample of from-source events
+  batch_size: 4                 # size of training batch
+  source_vicinity_radius: '1'
+  exposure: ${exposure}
+  exclude_energy: False
+  deterministic: False
+  log_sample: False
+  sigmaLnE: 0.2
+  EminData: null                # if not specified, uses Emin value, else cuts spectra from src_sample.. file
+  n_samples: 100
+  data_dir: ${directories.base}/data
+  mf: ${mf.train_mf}
+  threshold: 0.0              # source fraction threshold for binary classification
+
+
+model:
+  pretrained: ''
+  output_prefix: ''           # output model file path prefix
+  use_energy_as_feature: True # use energy as feature only (not coordinate)
+  disable_dynamic_conv: True  # disable dynamic convolutions (use standard graph convolutions)
+
+# Magnetic field models
+mf:
+  train_mf: 'jf'        # Magnetic field model used for training (jf | jf_sol | jf_pl | tf | pt)
+  validation_mf: 'jf'   # for validation
+  test_mf: 'jf'         # for testing
+  
+train:
+  n_epochs: 20
+  show_fig: False
+  n_early_stop: 10
+  loss: binary_crossentropy
+  alpha: 0.01                 # type 1 maximal error
+  beta: 0.05                  # type 2 maximal error
+  monitor: frac
+  n_samples: 100             # number of samples per training epoch
+  n_validation_samples: 100  # number of samples used for validation after each epoch
+  n_test_samples: 500
+  min_version: 0
+  plot_learning_curves: False
+  min_delta: 1e-6
+  evaluate_test_loss: False
+  Neecr: ${data.Neecr}
+  f_src: ${data.f_src}                      # These parameters are copied, because they are used in training/validation
+  f_src_max: ${data.f_src_max}              # Maximum fraction of source events (used when f_src is not specified)
+  f_src_min: ${data.f_src_min}
+
+
+directories:
+  base: .
+  data: ${directories.base}/data
+
+experiment_name: dev
