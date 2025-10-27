@@ -54,7 +54,6 @@ def load_src_sample(
 
     suffix : str, optional
         May be used to select a ranage of files (e.g. suffix='*') or specific realizations
-        Example: '*' for glob pattern matching, '_001' for specific realization
 
     sources : List[str], optional
         Explicit list of sources or file paths to load. If None, uses args.source_id.
@@ -80,9 +79,9 @@ def load_src_sample(
 
     for source_id in sources:
         if 'src_sample_' in source_id:
-            infiles = source_id  # looks like path
+            infiles = source_id
         else:
-            _, _, D_src = get_source_data(source_id)  # looks like source name
+            _, _, D_src = get_source_data(source_id)
             infiles = ('src_sample_' + source_id + '_D' + D_src
                        + '_Emin' + str(args.Emin)
                        + '_N' + str(args.Nini)
@@ -253,7 +252,7 @@ def init_common_cline_args(description):
     add_arg('--beta', type=float, help='type 2 maximal error', default=0.05)
 
     add_arg('--sigmaLnE', type=float, help='deltaE/E energy resolution', default=0.2)
-    add_arg('--EminData', type=float, help='minimal data energy in EeV', default=56)
+    add_arg('--EminData', type=float, help='minimal data energy in EeV', default=None)
 
     add_arg('--exposure', type=str, help='exposure: uniform/TA', default='uniform')
     add_arg('--exclude_energy', action='store_true', help='do not include energy into feature list')
