@@ -1,8 +1,10 @@
 import logging
+import os
 
 import numpy as np
 import healpy as hp
 
+from omegaconf import DictConfig
 from sys import stderr
 from abc import ABC, abstractmethod
 from typing import Optional, List, Union, Generator
@@ -26,13 +28,13 @@ class BaseGenerator(ABC):
     """
     def __init__(
             self,
-            args: Namespace,
+            args: Namespace | DictConfig,
             deterministic: Optional[bool] = None,
             seed: int = 0,
             n_samples: Optional[int] = None,
             return_frac: bool = False,
-            suffix: str = '*',
-            sources: Optional[List[str]] = None,  # TODO: check the type
+            suffix: str = '',
+            sources: Optional[List[str]] = None,
             mixture: Optional[list] = None,
             add_iso: Optional[bool] = None,
             sampler: Union[str, Generator[tuple[int, int]], int] = "auto",
@@ -54,7 +56,7 @@ class BaseGenerator(ABC):
         self.seed = seed
         self.return_frac = return_frac
         self.sigmaLnE = args.sigmaLnE
-        self.logEmin = np.log(args.EminData)
+        self.logEmin = np.log(args.EminData) if args.EminData is not None else  np.log(args.Emin)
 
         if add_iso is None:
             self.add_iso = args.f_src_min > 0 or not args.log_sample
@@ -90,7 +92,7 @@ class BaseGenerator(ABC):
         self.source_weights = None
 
         fE, lnE = self._load_iso_flux(args.data_dir)
-        idx = np.where(lnE >= np.log(args.EminData) - 3 * self.sigmaLnE)[0]
+        idx = np.where(lnE >= self.logEmin - 3 * self.sigmaLnE)[0]
         self.lnE_iso = lnE[idx]
         self.p_iso = fE[idx]
         self.p_iso /= np.sum(self.p_iso)
@@ -262,7 +264,7 @@ class BaseGenerator(ABC):
                 coordinates = np.concatenate((coordinates, iso_coordinates), axis=0)
 
             E = np.exp(coordinates[:, 3])
-            coordinates[:, 3] = 1000 / (E * E)  # x,y,z,(E/EeV)^-2
+            coordinates[:, 3] = 1000 / (E * E)  # x,y,z, 1000 * (E/EeV)^-2
 
         answer = Nsrc / self.Neecr
 
@@ -278,7 +280,7 @@ class BaseGenerator(ABC):
 class SampleGeneratorTorch(BaseGenerator, Dataset):
     """
     Sample generator for pytorch.Dataset class.
-     NOTE: __getitem__ returns single healpix map
+     NOTE: __getitem__ returns a single map
 
      n_batches:
     """
@@ -301,7 +303,7 @@ class SampleGeneratorTorch(BaseGenerator, Dataset):
 class SampleGeneratorKeras(BaseGenerator, Sequence):
     """
     Sample generator for keras.Sequence
-     NOTE: __getitem__ returns batch of healpix maps
+     NOTE: __getitem__ returns batch of maps
     """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
