@@ -143,6 +143,15 @@ class EdgeConv(layers.Layer):
 
         return x
 
+    def compute_output_shape(self, input_shape):
+        try:
+            _, f_shape = input_shape
+        except ValueError:
+            f_shape = input_shape
+
+        output_dims = self.kernel_layers[-1] if self.kernel_layers else f_shape[-1]
+        return f_shape[0], f_shape[1], output_dims
+
     def get_config(self):
         config = super(EdgeConv, self).get_config()
         config.update({
@@ -176,29 +185,31 @@ class EdgeConv(layers.Layer):
     def call(self, x):
         try:
             points, features = x
-        except TypeError:
-            points = features = x
+        except ValueError:
+            points = x
+            features = x
 
         # distance matrix
         D = batch_distance_matrix_general(points, points)  # (N, P, P)
-
-        # Get k nearest neighbors
         _, indices = tf.nn.top_k(-D, k=self.next_neighbors + 1)  # (N, P, K+1)
         indices = indices[:, :, 1:]  # (N, P, K) remove self connection
-
-        # Get features of nearest neighbors
         knn_fts = knn(indices, features)  # (N, P, K, C)
-
-        # Tile center features to match neighbor dimensions
         knn_fts_center = tf.tile(tf.expand_dims(features, axis=2),
                                  [1, 1, self.next_neighbors, 1])  # (N, P, K, C)
-
-        # Concatenate center and neighbor features
         knn_fts = tf.concat([knn_fts_center, knn_fts], axis=-1)  # (N, P, K, 2*C)
 
-        res = layers.TimeDistributed(layers.TimeDistributed(self.kernel_model))(knn_fts)  # (N, P, K, C')
-        # aggregation
-        agg = self.agg_func(res, axis=2)  # (N, P, C')
+        # Flatten array to process batch
+        knn_fts_flat = tf.reshape(knn_fts, [-1, 2 * tf.shape(features)[-1]])  # (N*P*K, 2*C)
+        res_flat = self.kernel_model(knn_fts_flat)  # (N*P*K, C')
+
+        # Reshape back: (N, P, K, C')
+        output_dim = res_flat.shape[-1]
+        batch_size = tf.shape(features)[0]
+        num_points = tf.shape(features)[1]
+
+        res = tf.reshape(res_flat, [batch_size, num_points, self.next_neighbors, output_dim])
+
+        agg = self.agg_func(res, axis=2)    # (N, P, C')
         return agg
 
 
