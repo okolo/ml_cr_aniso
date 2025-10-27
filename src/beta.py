@@ -285,15 +285,15 @@ def calc_detectable_frac(gen, model, args, gen2=None, swap_h0_and_h1=False, verb
                 break
             f_src_min_boundary = max(0, (args.Neecr * th_eta - 1) / args.Neecr)
             f_src_max_boundary = min(1, (args.Neecr * th_eta + 1) / args.Neecr)
-            args.f_src_min = min(f_src_min_boundary, th_eta / frac_search_range)
-            args.f_src_max = max(f_src_max_boundary, min(th_eta * frac_search_range, 1))
+            args.f_src_min = float(min(f_src_min_boundary, th_eta / frac_search_range))
+            args.f_src_max = float(max(f_src_max_boundary, min(th_eta * frac_search_range, 1)))
 
             frac_search_range = np.sqrt(frac_search_range)
             gen.sampler = f_sampler(args)
             gen.add_iso = (args.f_src_min > 0)
     finally:
-        args.f_src_min = f_src_min
-        args.f_src_max = f_src_max
+        args.f_src_min = float(f_src_min)
+        args.f_src_max = float(f_src_max)
         gen.add_iso = add_iso
         gen.sampler = sampler
 
