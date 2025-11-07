@@ -14,7 +14,7 @@ custom_objects={
         'OrderMap': nnhealpix.layers.OrderMap
      }
 
-def create_model(input_dim, n_energy_bins=1, nside_min=32, inner_layer_sizes=[],
+def create_cnn_model(input_dim, n_energy_bins=1, nside_min=32, inner_layer_sizes=[],
                  n_filters=32, pretrained='', l2=0, dropout_rate=0.,
                  normalize=False,  activation='relu', output_activation = 'sigmoid',
                  loss='binary_crossentropy', metrics='accuracy', lr=1.):

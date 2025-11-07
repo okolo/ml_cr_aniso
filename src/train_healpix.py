@@ -1,19 +1,18 @@
 import logging
 
-import numpy as np
-import argparse
 from tensorflow import keras
 import time
 import matplotlib
 from os import path, remove
 import healpy as hp
 from sys import stderr, stdout
-from cnn_healpix import create_model
+from models.cnn_healpix import create_cnn_model
 from beta import calc_detectable_frac
+from generators.utils import f_sampler, load_src_sample, test_seed, train_seed, val_seed
 from train import *
 
 def SampleGenerator(args, **kwargs):
-    from exposure import create_exposure
+    from generators.exposure import create_exposure
     exposure = create_exposure(args)
     if args.exclude_energy:
         return SampleGeneratorSingleBin(args, exposure=exposure, **kwargs)
@@ -491,7 +490,7 @@ def main():
 
 
 
-    model = create_model(train_gen.Ncells, n_energy_bins=train_gen.n_bins_lgE, nside_min=args.nside_min, n_filters=args.n_filters,
+    model = create_cnn_model(train_gen.Ncells, n_energy_bins=train_gen.n_bins_lgE, nside_min=args.nside_min, n_filters=args.n_filters,
                          inner_layer_sizes=inner_layers, pretrained=args.pretrained)
 
     if args.pretrained and len(args.output_prefix) == 0:
