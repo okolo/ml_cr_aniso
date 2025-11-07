@@ -2,7 +2,7 @@ import argparse
 
 import numpy as np
 
-from train import test_seed, f_sampler
+from generators.utils import test_seed
 
 cline_parser = argparse.ArgumentParser(description='Calculate minimal detectable fraction',
                                        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
