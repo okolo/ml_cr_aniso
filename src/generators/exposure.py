@@ -46,7 +46,8 @@ class GeometricExposure(Exposure):
     Energy efficiency for Pierre Auger is ~ 1 for E > 1 EeV thus consideration is not necessary
     see page 6 of https://arxiv.org/pdf/2109.13400
 
-    TODO: check Telescope Array energy efficiency and max_theta_deg
+    Energy efficiency for Telescope Array is ~ 1 for E > 10^{18.8}
+    see pages 2-3 of https://doi.org/10.22323/1.358.0298
     """
     def __init__(self, detector_latitude_deg, max_theta_deg):
         """

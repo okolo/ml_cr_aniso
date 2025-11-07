@@ -15,12 +15,10 @@ from keras.models import Model
 from models import create_model, get_model_name
 
 from beta import calc_detectable_frac
-from train import (
+from generators.utils import (
     source_data, train_seed, val_seed, test_seed,
-    get_loss,
-    # add_arg, cl_args, init_train_cline_args,
-    plot_learning_curves
 )
+from train import get_loss, plot_learning_curves
 from generators import SampleGeneratorKeras as SampleGenerator
 
 

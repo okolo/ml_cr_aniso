@@ -1,5 +1,4 @@
 import logging
-import os
 
 import numpy as np
 import healpy as hp
@@ -18,8 +17,8 @@ from argparse import Namespace
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 
-from exposure import create_exposure, Exposure
-from train import f_sampler, load_src_sample   # TODO: must be independent
+from .exposure import create_exposure, Exposure
+from .utils import f_sampler, load_src_sample   # TODO: must be independent
 
 
 class BaseGenerator(ABC):

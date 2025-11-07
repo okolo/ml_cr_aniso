@@ -1,6 +1,6 @@
 import numpy as np
 from sys import stderr
-from train import f_sampler
+from generators.utils import f_sampler
 
 def calc_beta_eta(gen, model, alpha, gen2=None, beta_threshold=None, verbose=0):
     """
