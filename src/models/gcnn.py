@@ -1,7 +1,7 @@
 from tensorflow import keras
 from tensorflow.keras.layers import Dense, GlobalAvgPool1D, Input, Dropout, BatchNormalization
 
-from models import edgeconv
+from . import edgeconv
 
 def layer_name(prefix):
     return edgeconv.EdgeConv.layer_name(prefix)
